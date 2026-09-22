@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">
+  <defs>
+    <!-- Top text arc path -->
+    <path id="topArc" d="M 40,150 A 110,110 0 1,1 260,150" fill="none" />
+    <!-- Bottom text arc path -->
+    <path id="bottomArc" d="M 260,150 A 110,110 0 1,1 40,150" fill="none" />
+  </defs>
+
+  <g fill="none" stroke="#223a5e" stroke-linecap="round">
+    <!-- Thick Outer Ring -->
+    <circle cx="150" cy="150" r="142" stroke-width="6" />
+    <!-- Inner Fine Ring -->
+    <circle cx="150" cy="150" r="134" stroke-width="1.5" />
+    <!-- Middle Ring -->
+    <circle cx="150" cy="150" r="88" stroke-width="2" />
+    <!-- Center Inner Ring -->
+    <circle cx="150" cy="150" r="82" stroke-width="1" />
+  </g>
+
+  <!-- Outer Circular Text -->
+  <text fill="#223a5e" font-family="'Amiri', 'Traditional Arabic', 'Scheherazade New', serif" font-weight="bold" font-size="15">
+    <textPath href="#topArc" startOffset="50%" text-anchor="middle">
+      ختم المقرئين على كتاب رب العالمين
+    </textPath>
+  </text>
+
+  <text fill="#223a5e" font-family="'Amiri', 'Traditional Arabic', 'Scheherazade New', serif" font-weight="bold" font-size="13">
+    <textPath href="#bottomArc" startOffset="50%" text-anchor="middle">
+      السيد الشريف / أحمد إبراهيم عبد الحميد الهاشمي
+    </textPath>
+  </text>
+
+  <!-- Flourishes on left and right -->
+  <g fill="#223a5e">
+    <!-- Right ornament -->
+    <path d="M 238,150 C 242,145 245,147 245,150 C 245,153 242,155 238,150 Z" />
+    <path d="M 235,145 C 240,140 248,142 245,150 C 248,158 240,160 235,155 Z" opacity="0.7" />
+    <!-- Left ornament -->
+    <path d="M 62,150 C 58,145 55,147 55,150 C 55,153 58,155 62,150 Z" />
+    <path d="M 65,145 C 60,140 52,142 55,150 C 52,158 60,160 65,155 Z" opacity="0.7" />
+  </g>
+
+  <!-- Center Text Content -->
+  <g fill="#223a5e" font-family="'Amiri', 'Traditional Arabic', 'Scheherazade New', serif" text-anchor="middle">
+    <!-- Top Word: المجيز -->
+    <text x="150" y="105" font-size="20" font-weight="bold">المجيز</text>
+    
+    <!-- Middle Line: القارئ المقرئ المحدث -->
+    <text x="150" y="138" font-size="17" font-weight="bold">القارئ المقرئ المحدث</text>
+    
+    <!-- Bottom Line: الشريف / أحمد إبراهيم -->
+    <text x="150" y="172" font-size="18" font-weight="bold">الشريف / أحمد إبراهيم</text>
+  </g>
+</svg>

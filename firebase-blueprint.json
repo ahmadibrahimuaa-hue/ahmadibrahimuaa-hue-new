@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "submissions": {
+      "title": "Submissions",
+      "description": "Student quiz and exam submissions",
+      "type": "object",
+      "properties": {
+        "studentName": { "type": "string" },
+        "unitTitle": { "type": "string" },
+        "testType": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "percentage": { "type": "number" },
+        "date": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "details": { "type": "string" },
+        "trainerId": { "type": "string" },
+        "trainerName": { "type": "string" }
+      },
+      "required": ["studentName", "unitTitle", "testType", "score", "totalQuestions", "percentage", "date"]
+    },
+    "students": {
+      "title": "Students",
+      "description": "Registered student profiles",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "registeredAt": { "type": "string" },
+        "updatedAt": { "type": "number" },
+        "trainerId": { "type": "string" },
+        "trainerName": { "type": "string" },
+        "referralCode": { "type": "string" }
+      },
+      "required": ["name", "registeredAt"]
+    },
+    "trainers": {
+      "title": "Trainers",
+      "description": "Trainer and Teacher accounts managed by Super Admin",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "trainer"] },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "referralCode": { "type": "string" },
+        "phone": { "type": "string" },
+        "notes": { "type": "string" },
+        "maxStudents": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "username", "password", "role", "status", "referralCode", "createdAt"]
+    },
+    "course_waitlist": {
+      "title": "Course Waitlist & Subscription Requests",
+      "description": "Student waitlist registrations and paid course subscription unlock requests",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "studentName": { "type": "string" },
+        "phone": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "paid"] },
+        "registeredAt": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "trainerName": { "type": "string" }
+      },
+      "required": ["courseId", "courseTitle", "studentName", "status", "registeredAt"]
+    }
+  }
+}
