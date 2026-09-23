@@ -42,6 +42,7 @@ export default function App() {
   const [activeCourseId, setActiveCourseId] = useState<string>('sakinan');
   const [activeTab, setActiveTab] = useState<string>('cover');
   const [selectedUnitIndex, setSelectedUnitIndex] = useState<number>(0);
+  const [selectedLessonIndex, setSelectedLessonIndex] = useState<number>(0);
   const [isExamActive, setIsExamActive] = useState<boolean>(false);
   const [showBagManagementModal, setShowBagManagementModal] = useState<boolean>(false);
   const [showFontModal, setShowFontModal] = useState<boolean>(false);
@@ -67,7 +68,22 @@ export default function App() {
     setActiveTab(result.targetTab);
     if (result.unitIndex !== undefined) {
       setSelectedUnitIndex(result.unitIndex);
+      setSelectedLessonIndex(0);
     }
+  };
+
+  const handleNavigateToLesson = (courseId: string, unitNumber: number, lessonNumber: number) => {
+    setActiveCourseId(courseId);
+    setActiveTab('units');
+    const courseObj = getCourseById(courseId) || SAKINAN_COURSE;
+    const uIdx = courseObj.units?.findIndex((u) => u.unitNumber === unitNumber) ?? -1;
+    const targetUnitIndex = uIdx >= 0 ? uIdx : 0;
+    setSelectedUnitIndex(targetUnitIndex);
+
+    const unitObj = courseObj.units?.[targetUnitIndex];
+    const lIdx = unitObj?.lessons?.findIndex((l) => l.lessonNumber === lessonNumber) ?? -1;
+    const targetLessonIndex = lIdx >= 0 ? lIdx : 0;
+    setSelectedLessonIndex(targetLessonIndex);
   };
 
   const handleLogout = () => {
@@ -296,6 +312,7 @@ export default function App() {
                 onOpenProgressModal={() => setShowProgressModal(true)} 
                 onOpenRegistrationModal={() => setShowRegistrationModal(true)}
                 onOpenSearch={() => setShowSearchModal(true)}
+                onNavigateToLesson={handleNavigateToLesson}
                 currentUnitNumber={currentUnit?.unitNumber}
                 currentUnitTitle={currentUnit?.title}
               />
@@ -365,6 +382,7 @@ export default function App() {
                 setActiveCourseId(cId);
                 setActiveTab('cover');
                 setSelectedUnitIndex(0);
+                setSelectedLessonIndex(0);
               }}
               onOpenTeacherDashboard={() => setShowTeacherDashboard(true)}
               onOpenProgressModal={() => setShowProgressModal(true)}
@@ -372,6 +390,7 @@ export default function App() {
               onOpenSearch={() => setShowSearchModal(true)}
               onOpenShareModal={() => setShowShareModal(true)}
               onLogout={() => setShowLogoutConfirmModal(true)}
+              onNavigateToLesson={handleNavigateToLesson}
               studentProfile={studentProfile}
               isTeacherMode={isTeacherMode}
             />
@@ -382,6 +401,7 @@ export default function App() {
                 setActiveCourseId(cId || 'sakinan');
                 setActiveTab('cover');
                 setSelectedUnitIndex(0);
+                setSelectedLessonIndex(0);
               }}
               onReturnToHome={() => {
                 setActiveTab('home');
@@ -412,6 +432,7 @@ export default function App() {
                     unit={currentUnit}
                     course={activeCourse}
                     isTeacherMode={isTeacherMode}
+                    initialLessonIndex={selectedLessonIndex}
                     onNavigateToExam={() => {
                       setIsExamActive(true);
                       setActiveTab('exam');

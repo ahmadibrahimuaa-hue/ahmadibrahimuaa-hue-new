@@ -43,12 +43,15 @@ export const saveStudentProfile = async (
   name: string,
   trainerId?: string,
   trainerName?: string,
-  referralCode?: string
+  referralCode?: string,
+  group?: string,
+  instituteName?: string
 ): Promise<StudentProfile> => {
   const cleanName = name.trim() || 'طالب جديد';
+  const existing = getStudentProfile();
   const profile: StudentProfile = {
     name: cleanName,
-    registeredAt: new Date().toLocaleDateString('ar-EG', {
+    registeredAt: existing?.registeredAt || new Date().toLocaleDateString('ar-EG', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -56,9 +59,11 @@ export const saveStudentProfile = async (
       hour: '2-digit',
       minute: '2-digit',
     }),
-    ...(trainerId ? { trainerId } : {}),
-    ...(trainerName ? { trainerName } : {}),
-    ...(referralCode ? { referralCode } : {}),
+    ...(trainerId ? { trainerId } : (existing?.trainerId ? { trainerId: existing.trainerId } : {})),
+    ...(trainerName ? { trainerName } : (existing?.trainerName ? { trainerName: existing.trainerName } : {})),
+    ...(referralCode ? { referralCode } : (existing?.referralCode ? { referralCode: existing.referralCode } : {})),
+    ...(group ? { group } : (existing?.group ? { group: existing.group } : {})),
+    ...(instituteName ? { instituteName } : (existing?.instituteName ? { instituteName: existing.instituteName } : {})),
   };
 
   if (typeof window !== 'undefined') {

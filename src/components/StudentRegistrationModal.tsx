@@ -12,8 +12,9 @@ import {
   setCurrentAuthTrainer,
   TrainerCodeStatus
 } from '../utils/trainerStorage';
-import { TrainerAccount } from '../types';
+import { TrainerAccount, GroupThemeConfig } from '../types';
 import { WhatsAppSupport } from './WhatsAppSupport';
+import { getAllGroupThemes, setActiveStudentGroup } from '../utils/groupThemeStorage';
 
 interface StudentRegistrationModalProps {
   isOpen: boolean;
@@ -42,6 +43,8 @@ export const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> =
   const [detectedTrainer, setDetectedTrainer] = useState<TrainerAccount | null>(null);
   const [activeTrainers, setActiveTrainers] = useState<TrainerAccount[]>([]);
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>('');
+  const [availableGroups, setAvailableGroups] = useState<GroupThemeConfig[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<string>('');
   const [studentError, setStudentError] = useState<string>('');
   const [isSubmittingStudent, setIsSubmittingStudent] = useState<boolean>(false);
 
@@ -78,6 +81,9 @@ export const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> =
 
       const list = getActiveTrainersList().filter((t) => t.role !== 'super_admin');
       setActiveTrainers(list);
+
+      const loadedGroups = getAllGroupThemes();
+      setAvailableGroups(loadedGroups);
     }
   }, [isOpen]);
 
@@ -136,12 +142,20 @@ export const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> =
     }
 
     try {
+      const matchedGroup = availableGroups.find((g) => g.groupId === selectedGroup || g.groupName === selectedGroup);
       await saveStudentProfile(
         cleanName,
         finalTrainerId || undefined,
         finalTrainerName || undefined,
-        referralCode.trim() || undefined
+        referralCode.trim() || undefined,
+        selectedGroup || undefined,
+        matchedGroup?.instituteName || undefined
       );
+
+      if (selectedGroup) {
+        setActiveStudentGroup(selectedGroup);
+      }
+
       onRegistered(cleanName);
     } catch (err) {
       console.error('Registration save error:', err);
@@ -419,6 +433,37 @@ export const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> =
                 </div>
               )}
             </div>
+
+            {/* Institute / Group Selection (Optional for tailored theme) */}
+            {availableGroups.length > 0 && (
+              <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 font-quran flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>المعهد القرآني أو المجموعة الطلابية (اختياري لتخصيص بيئة التعلم):</span>
+                  </label>
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">تخصيص الواجهة</span>
+                </div>
+                <select
+                  value={selectedGroup}
+                  onChange={(e) => setSelectedGroup(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500 font-tajawal cursor-pointer"
+                >
+                  <option value="">-- عام (المظهر القرآني الكلاسيكي الافتراضي) --</option>
+                  {availableGroups.map((grp) => (
+                    <option key={grp.groupId} value={grp.groupId}>
+                      🏛️ {grp.instituteName} - ({grp.groupName})
+                    </option>
+                  ))}
+                </select>
+                {selectedGroup && (
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    <span>سيتم تخصيص ألوان وشعار وبيئة الحقيبة تلقائياً وفق نسق معهدك.</span>
+                  </p>
+                )}
+              </div>
+            )}
 
             {studentError && (
               <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/60 p-3 rounded-xl border border-rose-200 dark:border-rose-900 animate-shake">

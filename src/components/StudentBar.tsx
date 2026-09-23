@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, Edit3, Check, Award, BookOpen, Trophy, School, 
-  ShieldCheck, Sparkles, Star, Share2, Calendar, FileText, Flame, LogOut, AlertCircle, Search 
+  ShieldCheck, Sparkles, Star, Share2, Calendar, FileText, Flame, LogOut, AlertCircle, Search, Heart 
 } from 'lucide-react';
 import { getStudentProfile, saveStudentProfile, subscribeStudentProfile, logoutStudent } from '../utils/studentStorage';
 import { getStudentProgress, subscribeStudentProgress, calculateProgressPercentage } from '../utils/studentProgressStorage';
 import { getCourseBadges, StudentBadge } from '../utils/badgeSystem';
 import { getDailyPlannerData, subscribeDailyPlanner, DailyPlannerData } from '../utils/dailyPlannerStorage';
 import { getStudentNotes, subscribeStudentNotes } from '../utils/studentNotesStorage';
+import { getFavoriteLessons, subscribeFavoriteLessons } from '../utils/favoriteLessonsStorage';
 import { BadgesModal } from './BadgesModal';
 import { ShareAchievementModal } from './ShareAchievementModal';
 import { DailyStudyPlannerModal } from './DailyStudyPlannerModal';
 import { StudentNotesDrawer } from './StudentNotesDrawer';
+import { FavoriteLessonsModal } from './FavoriteLessonsModal';
 import { StudentProfile } from '../types';
 
 interface StudentBarProps {
   onOpenProgressModal?: () => void;
   onOpenRegistrationModal?: () => void;
   onOpenSearch?: () => void;
+  onNavigateToLesson?: (courseId: string, unitNumber: number, lessonNumber: number) => void;
   activeCourseId?: string;
   currentUnitNumber?: number;
   currentUnitTitle?: string;
@@ -27,6 +30,7 @@ export const StudentBar: React.FC<StudentBarProps> = ({
   onOpenProgressModal,
   onOpenRegistrationModal,
   onOpenSearch,
+  onNavigateToLesson,
   activeCourseId = 'sakinan',
   currentUnitNumber,
   currentUnitTitle,
@@ -36,12 +40,14 @@ export const StudentBar: React.FC<StudentBarProps> = ({
   const [badges, setBadges] = useState<StudentBadge[]>([]);
   const [plannerData, setPlannerData] = useState<DailyPlannerData>(() => getDailyPlannerData());
   const [notesCount, setNotesCount] = useState<number>(() => getStudentNotes(activeCourseId).length);
+  const [favoritesCount, setFavoritesCount] = useState<number>(() => getFavoriteLessons().length);
   
   // Modals state
   const [isBadgesModalOpen, setIsBadgesModalOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isPlannerModalOpen, setIsPlannerModalOpen] = useState<boolean>(false);
   const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState<boolean>(false);
+  const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState<boolean>(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
   useEffect(() => {
@@ -67,6 +73,9 @@ export const StudentBar: React.FC<StudentBarProps> = ({
     const updateNotes = () => setNotesCount(getStudentNotes(activeCourseId).length);
     const unsubNotes = subscribeStudentNotes(updateNotes);
 
+    const updateFavorites = () => setFavoritesCount(getFavoriteLessons().length);
+    const unsubFavorites = subscribeFavoriteLessons(updateFavorites);
+
     const handleProgressReset = () => {
       setProfile(null);
       setProgressPct(0);
@@ -79,6 +88,7 @@ export const StudentBar: React.FC<StudentBarProps> = ({
       unsubscribeProg();
       unsubPlanner();
       unsubNotes();
+      unsubFavorites();
       window.removeEventListener('tajweed_progress_reset', handleProgressReset);
     };
   }, [activeCourseId]);
@@ -227,6 +237,21 @@ export const StudentBar: React.FC<StudentBarProps> = ({
               </button>
             )}
 
+            {/* Favorite Lessons Button */}
+            <button
+              onClick={() => setIsFavoritesModalOpen(true)}
+              className="bg-slate-950/80 hover:bg-slate-900 border border-slate-700 hover:border-rose-500/60 rounded-xl px-3 py-2 transition-all flex items-center gap-2 cursor-pointer shadow-inner text-rose-300 group"
+              title="عرض قائمة دروسي المفضلة"
+            >
+              <div className="w-7 h-7 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0 group-hover:scale-110 transition-transform">
+                <Heart className="w-4 h-4 fill-rose-500/40 text-rose-400" />
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block font-quran">المفضلة:</span>
+                <span className="text-xs font-bold font-quran text-rose-300">{favoritesCount} درس ❤️</span>
+              </div>
+            </button>
+
             {/* Share Achievement Button */}
             <button
               onClick={() => setIsShareModalOpen(true)}
@@ -334,6 +359,17 @@ export const StudentBar: React.FC<StudentBarProps> = ({
           </div>
         </div>
       )}
+
+      {/* Favorite Lessons Modal */}
+      <FavoriteLessonsModal
+        isOpen={isFavoritesModalOpen}
+        onClose={() => setIsFavoritesModalOpen(false)}
+        onSelectLesson={(cId, uNum, lNum) => {
+          if (onNavigateToLesson) {
+            onNavigateToLesson(cId, uNum, lNum);
+          }
+        }}
+      />
     </>
   );
 };

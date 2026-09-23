@@ -295,8 +295,11 @@ export interface GroupThemeConfig {
   instituteName: string; // اسم المعهد الرسمي (e.g. 'معهد الفرقان لعلوم القرآن')
   instituteSubtitle?: string; // الدفعة أو الشعار اللفظي
   logoUrl?: string; // رابط صورة الشعار الخاصة بالمعهد أو الحقيبة
-  logoIcon?: string; // رمز الشعار البديل: 'quran' | 'crown' | 'award' | 'sparkles' | 'landmark' | 'bookmark'
+  logoIcon?: string; // رمز الشعار البديل: 'quran' | 'crown' | 'award' | 'sparkles' | 'landmark' | 'bookmark' | 'shield' | 'star'
   themePreset: ThemePreset; // نسق الألوان المعتمد
+  customPrimaryColor?: string; // لون رئيسي مخصص للحقيبة (Hex)
+  customAccentColor?: string; // لون إطار وزخرفة وزينة مخصص (Hex)
+  isCustomPalette?: boolean; // هل تم تفعيل لوحة الألوان المخصصة بالكامل
   customBadgeText?: string; // شارة الحقيبة المخصصة لطلاب هذا المعهد
   welcomeMessage?: string; // رسالة ترحيبية خاصة بطلاب هذا المعهد
   updatedAt?: number;

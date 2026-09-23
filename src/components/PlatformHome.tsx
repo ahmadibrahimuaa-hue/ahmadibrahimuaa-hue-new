@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
-import { Course, StudentProfile } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Course, StudentProfile, GroupThemeConfig } from '../types';
 import { getAllCourses } from '../data/courses';
 import { getStudentProgress, calculateProgressPercentage, isCourseUnlocked, isCoursePassed, getCourseLockDetails } from '../utils/studentProgressStorage';
 import { 
   Sparkles, BookOpen, GraduationCap, Award, CheckCircle2, ArrowLeft, 
   Trophy, ShieldCheck, Lock, Unlock, AlertTriangle, Layers, X, Briefcase, 
-  DollarSign, Gift, Search, Share2, LogOut, User, FolderTree
+  DollarSign, Gift, Search, Share2, LogOut, User, FolderTree, Heart, Building
 } from 'lucide-react';
 import { WhatsAppSupport, WhatsAppUnlockRequestButton } from './WhatsAppSupport';
+import { FavoriteLessonsModal } from './FavoriteLessonsModal';
+import { 
+  getFavoriteLessons, 
+  subscribeFavoriteLessons, 
+  FavoriteLessonItem 
+} from '../utils/favoriteLessonsStorage';
+import { getActiveThemeForStudent, subscribeGroupThemes } from '../utils/groupThemeStorage';
+import { InstituteLogo } from './InstituteLogo';
 
 interface PlatformHomeProps {
   onSelectCourse: (courseId: string) => void;
@@ -17,6 +25,7 @@ interface PlatformHomeProps {
   onOpenSearch?: () => void;
   onOpenShareModal?: () => void;
   onLogout?: () => void;
+  onNavigateToLesson?: (courseId: string, unitNumber: number, lessonNumber: number) => void;
   studentProfile?: StudentProfile | null;
   isTeacherMode?: boolean;
 }
@@ -29,10 +38,34 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
   onOpenSearch,
   onOpenShareModal,
   onLogout,
+  onNavigateToLesson,
   studentProfile,
   isTeacherMode = false,
 }) => {
   const [lockedCourseModal, setLockedCourseModal] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<FavoriteLessonItem[]>(() => getFavoriteLessons());
+  const [isFavoritesModalOpen, setIsFavoritesModalOpen] = useState<boolean>(false);
+  const [activeTheme, setActiveTheme] = useState<GroupThemeConfig | null>(() => {
+    return getActiveThemeForStudent(studentProfile?.group);
+  });
+
+  useEffect(() => {
+    setActiveTheme(getActiveThemeForStudent(studentProfile?.group));
+  }, [studentProfile?.group]);
+
+  useEffect(() => {
+    const unsubThemes = subscribeGroupThemes(() => {
+      setActiveTheme(getActiveThemeForStudent(studentProfile?.group));
+    });
+    return () => unsubThemes();
+  }, [studentProfile?.group]);
+
+  useEffect(() => {
+    const unsub = subscribeFavoriteLessons((favs) => {
+      setFavorites(favs);
+    });
+    return () => unsub();
+  }, []);
 
   const courses = getAllCourses();
 
@@ -70,6 +103,15 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
                 <span>وضع المعلم مفعل (كافة الحقائب متاحة)</span>
               </span>
             )}
+            {activeTheme && (
+              <span className="bg-black/50 text-amber-200 border border-amber-400/60 text-xs font-bold px-3 py-1 rounded-full font-quran flex items-center gap-1.5 shadow-sm">
+                <InstituteLogo theme={activeTheme} className="w-4 h-4" iconClassName="w-3.5 h-3.5 text-amber-400" />
+                <span>المقرأة المعتمدة: {activeTheme.instituteName}</span>
+                <span className="text-[10px] bg-amber-400/20 px-1.5 py-0.2 rounded text-amber-300 font-mono">
+                  {activeTheme.groupName}
+                </span>
+              </span>
+            )}
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-black font-quran text-amber-100 leading-tight">
@@ -99,6 +141,16 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
                 <span>مشاركة الإنجاز والتقدم 🚀</span>
               </button>
             )}
+
+            {/* Favorite Lessons Button */}
+            <button
+              onClick={() => setIsFavoritesModalOpen(true)}
+              className="bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-500/60 font-bold px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              title="عرض قائمة دروسي المفضلة"
+            >
+              <Heart className="w-4 h-4 fill-rose-500 text-rose-400" />
+              <span>دروسي المفضلة ({favorites.length}) ❤️</span>
+            </button>
 
             {onOpenSearch && (
               <button
@@ -142,6 +194,69 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Quick Favorite Lessons Strip (Visible if student has saved favorites) */}
+      {favorites.length > 0 && (
+        <div className="bg-gradient-to-r from-rose-950/40 via-slate-900 to-rose-950/40 border border-rose-500/40 rounded-3xl p-5 shadow-lg space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/40">
+                <Heart className="w-4 h-4 fill-rose-500" />
+              </div>
+              <h3 className="text-base sm:text-lg font-bold font-quran text-amber-200">
+                دروسي المفضلة المحفوظة
+              </h3>
+              <span className="bg-rose-500/20 text-rose-300 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold border border-rose-500/30">
+                {favorites.length}
+              </span>
+            </div>
+
+            <button
+              onClick={() => setIsFavoritesModalOpen(true)}
+              className="text-xs text-rose-300 hover:text-white flex items-center gap-1 font-quran font-bold cursor-pointer transition-colors"
+            >
+              <span>عرض كافة الدروس ({favorites.length})</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {favorites.slice(0, 3).map((fav) => (
+              <div
+                key={fav.id}
+                onClick={() => {
+                  if (onNavigateToLesson) {
+                    onNavigateToLesson(fav.courseId, fav.unitNumber, fav.lessonNumber);
+                  } else {
+                    onSelectCourse(fav.courseId);
+                  }
+                }}
+                className="bg-slate-950/80 hover:bg-slate-800/80 border border-rose-500/30 hover:border-rose-400 p-4 rounded-2xl cursor-pointer transition-all flex flex-col justify-between space-y-2 group shadow-sm hover:scale-[1.01]"
+              >
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                    <span className="font-quran text-emerald-400 truncate max-w-[130px] font-bold">{fav.courseTitle}</span>
+                    <span className="font-mono text-slate-500">الوحدة {fav.unitNumber}</span>
+                  </div>
+                  <h4 className="text-xs sm:text-sm font-bold font-quran text-slate-100 group-hover:text-amber-200 transition-colors line-clamp-1">
+                    الدرس 0{fav.lessonNumber}: {fav.lessonTitle}
+                  </h4>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-[11px]">
+                  <span className="text-rose-400 font-bold flex items-center gap-1">
+                    <Heart className="w-3 h-3 fill-rose-500" />
+                    <span>مُفضّل</span>
+                  </span>
+                  <span className="text-amber-300 text-xs font-quran group-hover:translate-x-[-2px] transition-transform flex items-center gap-1">
+                    <span>انتقال سريع</span>
+                    <ArrowLeft className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Courses Grid Section */}
       <div className="space-y-4">
@@ -497,6 +612,19 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
           </div>
         </div>
       )}
+
+      {/* Favorite Lessons Modal */}
+      <FavoriteLessonsModal
+        isOpen={isFavoritesModalOpen}
+        onClose={() => setIsFavoritesModalOpen(false)}
+        onSelectLesson={(courseId, unitNumber, lessonNumber) => {
+          if (onNavigateToLesson) {
+            onNavigateToLesson(courseId, unitNumber, lessonNumber);
+          } else {
+            onSelectCourse(courseId);
+          }
+        }}
+      />
     </div>
   );
 };

@@ -169,6 +169,8 @@ export const InstituteThemeCustomizerPanel: React.FC<InstituteThemeCustomizerPan
     { key: 'award', label: 'وسام إتقان', icon: <Award className="w-5 h-5" /> },
     { key: 'sparkles', label: 'نور التجويد', icon: <Sparkles className="w-5 h-5" /> },
     { key: 'graduation-cap', label: 'قبعة إجازة', icon: <GraduationCap className="w-5 h-5" /> },
+    { key: 'shield', label: 'درع الحفاظ', icon: <ShieldCheck className="w-5 h-5" /> },
+    { key: 'star', label: 'نجمة الماهر', icon: <Star className="w-5 h-5" /> },
   ];
 
   return (
@@ -451,6 +453,64 @@ export const InstituteThemeCustomizerPanel: React.FC<InstituteThemeCustomizerPan
               </div>
             </div>
 
+            {/* Custom Palette Mode (Hex Colors) */}
+            <div className="space-y-3 sm:col-span-2 p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="text-slate-200 font-bold flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!currentEdit.isCustomPalette}
+                    onChange={(e) => setCurrentEdit({ ...currentEdit, isCustomPalette: e.target.checked })}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-slate-900 border-slate-700"
+                  />
+                  <span>تفعيل لوحة ألوان حرة مخصصة تماماً للحقيبة (Custom Hex Colors)</span>
+                </label>
+                <span className="text-[10px] text-amber-400">تجاوز النمط الجاهز</span>
+              </div>
+
+              {currentEdit.isCustomPalette && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 text-[11px] block">اللون الأساسي لغلاف الحقيبة (Primary Hex):</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={currentEdit.customPrimaryColor || '#064e3b'}
+                        onChange={(e) => setCurrentEdit({ ...currentEdit, customPrimaryColor: e.target.value })}
+                        className="w-9 h-9 rounded-xl border border-slate-700 bg-transparent cursor-pointer p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={currentEdit.customPrimaryColor || '#064e3b'}
+                        onChange={(e) => setCurrentEdit({ ...currentEdit, customPrimaryColor: e.target.value })}
+                        placeholder="#064e3b"
+                        className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl p-2 text-slate-100 font-mono text-xs outline-none dir-ltr"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-400 text-[11px] block">لون الإطار والزينة واللمعان (Accent Hex):</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={currentEdit.customAccentColor || '#fbbf24'}
+                        onChange={(e) => setCurrentEdit({ ...currentEdit, customAccentColor: e.target.value })}
+                        className="w-9 h-9 rounded-xl border border-slate-700 bg-transparent cursor-pointer p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={currentEdit.customAccentColor || '#fbbf24'}
+                        onChange={(e) => setCurrentEdit({ ...currentEdit, customAccentColor: e.target.value })}
+                        placeholder="#fbbf24"
+                        className="flex-1 bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl p-2 text-slate-100 font-mono text-xs outline-none dir-ltr"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Logo Selection: Icon Insignia vs Image URL */}
             <div className="space-y-2 sm:col-span-2">
               <label className="text-slate-300 font-bold flex items-center gap-1.5">
@@ -495,57 +555,94 @@ export const InstituteThemeCustomizerPanel: React.FC<InstituteThemeCustomizerPan
           </div>
 
           {/* Interactive Live Student Mockup Preview */}
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <span className="text-[11px] font-bold text-amber-300 font-quran flex items-center gap-1">
-              <Eye className="w-3.5 h-3.5" />
-              معاينة فورية لتجربة الطالب بهذا المعهد (Live Mockup):
-            </span>
+          <div className="space-y-3 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-amber-300 font-quran flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-emerald-400" />
+                <span>معاينة حية لغلاف الحقيبة بتخصيص هذا المعهد (Live Bag Cover Mockup):</span>
+              </span>
+              <span className="text-[10px] text-slate-400">تحديث فوري مع كل تغيير</span>
+            </div>
 
-            {/* Live Card Mockup */}
-            <div className={`p-4 rounded-2xl border ${presetDetails.cardBorder} shadow-lg space-y-3 bg-gradient-to-r ${presetDetails.bannerGradient} transition-all`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-md overflow-hidden"
-                    style={{ backgroundColor: presetDetails.primaryColor }}
-                  >
-                    {currentEdit.logoUrl ? (
-                      <img src={currentEdit.logoUrl} alt="logo" className="w-full h-full object-contain p-1" />
-                    ) : (
-                      <Landmark className="w-5 h-5" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-amber-300 font-bold font-quran block">
-                      {currentEdit.instituteName || 'اسم المعهد المخصص'}
-                    </span>
-                    <h5 className="text-xs font-bold text-white font-quran">
-                      {currentEdit.groupName || 'اسم المجموعة الطلابية'}
-                    </h5>
-                  </div>
-                </div>
-
-                {currentEdit.customBadgeText && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${presetDetails.badgeBg}`}>
-                    {currentEdit.customBadgeText}
-                  </span>
+            {/* Live Bag Cover Mockup */}
+            <div 
+              className={`p-5 rounded-3xl border-2 shadow-2xl space-y-4 text-center transition-all ${
+                currentEdit.isCustomPalette && currentEdit.customPrimaryColor
+                  ? 'border-amber-400/80 shadow-2xl'
+                  : `${presetDetails.cardBorder} bg-gradient-to-b ${presetDetails.bannerGradient}`
+              }`}
+              style={
+                currentEdit.isCustomPalette && currentEdit.customPrimaryColor
+                  ? {
+                      background: `linear-gradient(180deg, ${currentEdit.customPrimaryColor}ee 0%, #090d16 55%, ${currentEdit.customPrimaryColor}ee 100%)`,
+                      borderColor: currentEdit.customAccentColor || '#fbbf24',
+                    }
+                  : undefined
+              }
+            >
+              {/* Institute Header Strip */}
+              <div className="inline-flex items-center gap-2 bg-black/40 border border-white/20 px-3 py-1 rounded-full text-xs text-amber-300 font-quran shadow-sm">
+                {currentEdit.logoUrl ? (
+                  <img src={currentEdit.logoUrl} alt="logo" className="w-4 h-4 object-contain rounded" />
+                ) : (
+                  <Landmark className="w-3.5 h-3.5 text-amber-400" />
                 )}
+                <span>حقيبة معتمدة لدى: {currentEdit.instituteName || 'اسم المعهد المخصص'}</span>
+                <span className="text-[10px] bg-amber-400/20 text-amber-200 px-1.5 py-0.2 rounded font-mono">
+                  {currentEdit.groupName}
+                </span>
+              </div>
+
+              {/* Title & Badge */}
+              <div className="space-y-1">
+                <h4 className="text-lg sm:text-xl font-black font-quran text-amber-200">
+                  التقاء الساكنين في التجويد
+                </h4>
+                <p className="text-xs text-slate-200/90 font-tajawal max-w-sm mx-auto">
+                  {currentEdit.instituteSubtitle || 'منهج تعليمي تطبيقي متدرج لمعلمي القرآن الكريم والقراءات'}
+                </p>
+              </div>
+
+              {/* Bag Badge */}
+              <div className="flex items-center justify-center">
+                <span 
+                  className="inline-flex items-center gap-1.5 text-xs font-bold font-quran px-4 py-1 rounded-full border shadow"
+                  style={{
+                    backgroundColor: currentEdit.customPrimaryColor || presetDetails.primaryColor,
+                    borderColor: currentEdit.customAccentColor || presetDetails.accentColor,
+                    color: '#ffffff',
+                  }}
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>{currentEdit.customBadgeText || 'الكتاب المعتمد لدفعة الإتقان 🌿'}</span>
+                </span>
               </div>
 
               {currentEdit.welcomeMessage && (
-                <p className="text-[11px] text-slate-200/90 bg-black/30 p-2 rounded-xl leading-relaxed">
-                  💬 {currentEdit.welcomeMessage}
-                </p>
+                <div className="text-xs text-slate-200 bg-black/30 p-2.5 rounded-xl border border-white/10 text-right">
+                  <span className="text-amber-300 font-bold block mb-0.5">رسالة ترحيبية خاصة بالطلاب:</span>
+                  <p className="text-[11px] leading-relaxed">{currentEdit.welcomeMessage}</p>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Save Action */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => handleSetAsActivePreview(currentEdit.groupId)}
+              className="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-400/40 font-bold font-quran px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+              title="تفعيل هذا المعهد لمعاينة الطالب مباشرة"
+            >
+              <Eye className="w-4 h-4 text-emerald-400" />
+              <span>تعيين كمعاينة نشطة لصفحات الطالب 👁️</span>
+            </button>
+
             <button
               type="button"
               onClick={handleSave}
-              className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-bold font-quran px-6 py-2.5 rounded-xl text-xs sm:text-sm shadow-lg flex items-center gap-2 cursor-pointer transition-all hover:scale-105"
+              className="w-full sm:w-auto bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-bold font-quran px-6 py-2.5 rounded-xl text-xs sm:text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-105"
             >
               <Save className="w-4 h-4" />
               <span>حفظ إعدادات المعهد والمجموعة 💾</span>

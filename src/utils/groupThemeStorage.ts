@@ -1,4 +1,5 @@
 import { doc, getDoc, setDoc, onSnapshot, collection, getDocs } from 'firebase/firestore';
+import type { CSSProperties } from 'react';
 import { db } from '../firebase';
 import { GroupThemeConfig, ThemePreset } from '../types';
 
@@ -64,7 +65,21 @@ export const DEFAULT_GROUP_THEMES: GroupThemeConfig[] = [
   },
 ];
 
-export const getThemePresetDetails = (preset: ThemePreset = 'emerald') => {
+export interface ThemePresetDetails {
+  key: ThemePreset;
+  name: string;
+  bannerGradient: string;
+  cardBorder: string;
+  badgeBg: string;
+  accentColor: string;
+  primaryColor: string;
+  cardGlow: string;
+  pillBg: string;
+  textHighlight: string;
+  ringColor: string;
+}
+
+export const getThemePresetDetails = (preset: ThemePreset = 'emerald'): ThemePresetDetails => {
   switch (preset) {
     case 'royal_purple':
       return {
@@ -152,6 +167,37 @@ export const getThemePresetDetails = (preset: ThemePreset = 'emerald') => {
         ringColor: 'ring-emerald-400',
       };
   }
+};
+
+export interface EffectiveThemeStyle extends ThemePresetDetails {
+  customCardStyle?: CSSProperties;
+  customBorderStyle?: CSSProperties;
+  customBadgeStyle?: CSSProperties;
+}
+
+export const getEffectiveThemeStyle = (theme?: GroupThemeConfig | null): EffectiveThemeStyle => {
+  const preset = getThemePresetDetails(theme?.themePreset || 'emerald');
+  if (theme?.isCustomPalette && theme.customPrimaryColor && theme.customAccentColor) {
+    return {
+      ...preset,
+      accentColor: theme.customAccentColor,
+      primaryColor: theme.customPrimaryColor,
+      customCardStyle: {
+        background: `linear-gradient(180deg, ${theme.customPrimaryColor}ee 0%, #090d16 55%, ${theme.customPrimaryColor}ee 100%)`,
+        borderColor: theme.customAccentColor,
+        boxShadow: `0 25px 50px -12px ${theme.customPrimaryColor}66`,
+      },
+      customBorderStyle: {
+        borderColor: theme.customAccentColor,
+      },
+      customBadgeStyle: {
+        backgroundColor: `${theme.customPrimaryColor}ee`,
+        borderColor: theme.customAccentColor,
+        color: '#ffffff',
+      },
+    };
+  }
+  return preset;
 };
 
 export const getStoredGroupThemes = (): GroupThemeConfig[] => {

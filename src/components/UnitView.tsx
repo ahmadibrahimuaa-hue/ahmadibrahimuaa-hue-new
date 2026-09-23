@@ -6,7 +6,7 @@ import {
   BookOpen, Sparkles, CheckCircle2, HelpCircle, FileText, Layers, 
   ArrowRight, ArrowLeft, RotateCcw, Award, UserCheck, GitBranch, 
   ChevronDown, ChevronUp, Target, Eye, EyeOff, Lightbulb, Edit3, FolderSync,
-  Play, Video, ExternalLink, X, PlusCircle, Maximize2, AlertCircle
+  Play, Video, ExternalLink, X, PlusCircle, Maximize2, AlertCircle, Heart
 } from 'lucide-react';
 import { saveSubmission } from '../utils/studentStorage';
 import { getUnitQuizQuestions, subscribeQuestionBank, UnitQuizQuestion } from '../utils/questionStorage';
@@ -16,12 +16,19 @@ import { LessonClassifierModal } from './LessonClassifierModal';
 import { MakharijInteractiveAtlas } from './MakharijInteractiveAtlas';
 import { SifaatVocalSimulator } from './SifaatVocalSimulator';
 import { ALL_COURSES } from '../data/courses';
+import { 
+  toggleFavoriteLesson, 
+  getFavoriteLessons, 
+  subscribeFavoriteLessons, 
+  makeLessonFavoriteId 
+} from '../utils/favoriteLessonsStorage';
 
 interface UnitViewProps {
   unit: Unit;
   course?: Course;
   isTeacherMode?: boolean;
   onNavigateToExam?: () => void;
+  initialLessonIndex?: number;
 }
 
 /** Helper to convert YouTube / Vimeo / MP4 URLs to embedded player source */
@@ -161,12 +168,39 @@ function renderInlineFormatting(text: string) {
   });
 }
 
-export const UnitView: React.FC<UnitViewProps> = ({ unit, course, isTeacherMode = true, onNavigateToExam }) => {
-  const [activeLessonIndex, setActiveLessonIndex] = useState<number>(0);
+export const UnitView: React.FC<UnitViewProps> = ({ 
+  unit, 
+  course, 
+  isTeacherMode = true, 
+  onNavigateToExam,
+  initialLessonIndex,
+}) => {
+  const [activeLessonIndex, setActiveLessonIndex] = useState<number>(initialLessonIndex ?? 0);
   const [viewMode, setViewMode] = useState<'lesson' | 'quiz' | 'atlas' | 'sifaat'>('lesson');
   const [showDiagramTree, setShowDiagramTree] = useState<boolean>(true);
   const [showClassifierModal, setShowClassifierModal] = useState<boolean>(false);
   const [showTeacherGuide, setShowTeacherGuide] = useState<boolean>(false);
+  const [favoriteToast, setFavoriteToast] = useState<string | null>(null);
+
+  // Favorites tracking
+  const [favoritedLessonIds, setFavoritedLessonIds] = useState<Set<string>>(() => {
+    const current = getFavoriteLessons();
+    return new Set(current.map((item) => item.id));
+  });
+
+  useEffect(() => {
+    const unsub = subscribeFavoriteLessons((favs) => {
+      setFavoritedLessonIds(new Set(favs.map((f) => f.id)));
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (typeof initialLessonIndex === 'number' && initialLessonIndex >= 0 && initialLessonIndex < unit.lessons.length) {
+      setActiveLessonIndex(initialLessonIndex);
+      setViewMode('lesson');
+    }
+  }, [initialLessonIndex]);
 
   const isTeacherGuideActive = isTeacherMode || showTeacherGuide;
 
@@ -221,7 +255,11 @@ export const UnitView: React.FC<UnitViewProps> = ({ unit, course, isTeacherMode 
   }, [allUnitsSubmitted]);
 
   useEffect(() => {
-    setActiveLessonIndex(0);
+    if (typeof initialLessonIndex === 'number' && initialLessonIndex >= 0 && initialLessonIndex < unit.lessons.length) {
+      setActiveLessonIndex(initialLessonIndex);
+    } else {
+      setActiveLessonIndex(0);
+    }
     setViewMode('lesson');
     setQuizQuestions(getQuestionsForUnit());
     const unsubscribe = subscribeQuestionBank(() => {
@@ -264,6 +302,33 @@ export const UnitView: React.FC<UnitViewProps> = ({ unit, course, isTeacherMode 
     addLessonToUnit(courseId, unit.id, updatedLesson);
     currentLesson.videoUrl = newUrl.trim() || undefined;
     setIsEditingVideoUrl(false);
+  };
+
+  // Favorites logic
+  const currentLessonFavId = makeLessonFavoriteId(courseId, unit.unitNumber, currentLesson.lessonNumber);
+  const isCurrentLessonFavorited = favoritedLessonIds.has(currentLessonFavId);
+
+  const handleToggleFavorite = async () => {
+    const res = await toggleFavoriteLesson({
+      courseId,
+      courseTitle: course?.title || 'الحقيبة التجويدية',
+      unitNumber: unit.unitNumber,
+      unitTitle: unit.title,
+      lessonNumber: currentLesson.lessonNumber,
+      lessonTitle: currentLesson.title,
+      lessonSubtitle: currentLesson.subtitle,
+      hasVideo: Boolean(effectiveVideoUrl),
+      videoUrl: effectiveVideoUrl,
+    });
+
+    const msg = res.isFavorited
+      ? `تمت إضافة (${currentLesson.title}) إلى دروسك المفضلة ❤️`
+      : `تمت إزالة (${currentLesson.title}) من دروسك المفضلة`;
+    
+    setFavoriteToast(msg);
+    setTimeout(() => {
+      setFavoriteToast(null);
+    }, 3200);
   };
 
   const activeDiscussionAnswers: string[] = (currentLesson.discussionAnswers && currentLesson.discussionAnswers.length > 0)
@@ -374,24 +439,30 @@ export const UnitView: React.FC<UnitViewProps> = ({ unit, course, isTeacherMode 
         <div className={`flex flex-wrap items-center gap-2 pt-4 border-t ${
           isIdgham ? 'border-purple-800/80' : 'border-emerald-800/80'
         }`}>
-          {unit.lessons.map((lesson, idx) => (
-            <button
-              key={lesson.id}
-              onClick={() => {
-                setActiveLessonIndex(idx);
-                setViewMode('lesson');
-              }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer ${
-                viewMode === 'lesson' && activeLessonIndex === idx
-                  ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
-                  : isIdgham
-                  ? 'bg-purple-950/70 text-purple-200 hover:bg-purple-900'
-                  : 'bg-emerald-900/60 text-emerald-200 hover:bg-emerald-800'
-              }`}
-            >
-              <span>الدرس 0{lesson.lessonNumber}: {lesson.title.split(':')[1] || lesson.title}</span>
-            </button>
-          ))}
+          {unit.lessons.map((lesson, idx) => {
+            const isLessonFav = favoritedLessonIds.has(makeLessonFavoriteId(courseId, unit.unitNumber, lesson.lessonNumber));
+            return (
+              <button
+                key={lesson.id}
+                onClick={() => {
+                  setActiveLessonIndex(idx);
+                  setViewMode('lesson');
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer ${
+                  viewMode === 'lesson' && activeLessonIndex === idx
+                    ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
+                    : isIdgham
+                    ? 'bg-purple-950/70 text-purple-200 hover:bg-purple-900'
+                    : 'bg-emerald-900/60 text-emerald-200 hover:bg-emerald-800'
+                }`}
+              >
+                <span>الدرس 0{lesson.lessonNumber}: {lesson.title.split(':')[1] || lesson.title}</span>
+                {isLessonFav && (
+                  <Heart className="w-3 h-3 fill-rose-500 text-rose-500 shrink-0" />
+                )}
+              </button>
+            );
+          })}
 
           {/* Interactive Visual Atlas & Vocal Simulator Tabs - Exclusively for Makharij Course */}
           {isMakharij && (
@@ -472,17 +543,48 @@ export const UnitView: React.FC<UnitViewProps> = ({ unit, course, isTeacherMode 
                 </div>
               </div>
 
-              {isTeacherMode && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Heart Favorite Button */}
                 <button
-                  onClick={() => setShowClassifierModal(true)}
-                  className="bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-3.5 py-2 rounded-xl text-xs font-bold font-quran flex items-center gap-1.5 transition-all shadow-sm cursor-pointer shrink-0"
-                  title="تصنيف ونقل هذا الدرس إلى حقيبة أو مستوى دراسي آخر أو إنشاء حقيبة جديدة له"
+                  onClick={handleToggleFavorite}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer border shadow-sm ${
+                    isCurrentLessonFavorited
+                      ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-400/30'
+                      : 'bg-white border-slate-200 text-slate-700 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50/40'
+                  }`}
+                  title={isCurrentLessonFavorited ? 'إزالة هذا الدرس من دروسي المفضلة' : 'حفظ هذا الدرس في دروسي المفضلة'}
                 >
-                  <FolderSync className="w-4 h-4 text-amber-800" />
-                  <span>تصنيف / نقل هذا الدرس</span>
+                  <Heart className={`w-4 h-4 transition-transform duration-300 ${
+                    isCurrentLessonFavorited ? 'fill-rose-500 text-rose-500 scale-110' : 'text-slate-400 hover:text-rose-500'
+                  }`} />
+                  <span className="font-tajawal">
+                    {isCurrentLessonFavorited ? 'مُفضّل ❤️' : 'أضف للمفضلة'}
+                  </span>
                 </button>
-              )}
+
+                {isTeacherMode && (
+                  <button
+                    onClick={() => setShowClassifierModal(true)}
+                    className="bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-3.5 py-2 rounded-xl text-xs font-bold font-quran flex items-center gap-1.5 transition-all shadow-sm cursor-pointer shrink-0"
+                    title="تصنيف ونقل هذا الدرس إلى حقيبة أو مستوى دراسي آخر أو إنشاء حقيبة جديدة له"
+                  >
+                    <FolderSync className="w-4 h-4 text-amber-800" />
+                    <span>تصنيف / نقل هذا الدرس</span>
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Favorite Action Notification Toast */}
+            {favoriteToast && (
+              <div className="bg-slate-900 text-white border-2 border-rose-500/80 px-4 py-2.5 rounded-2xl text-xs font-tajawal shadow-xl flex items-center justify-between gap-3 animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <Heart className="w-4 h-4 fill-rose-500 text-rose-500 shrink-0" />
+                  <span className="font-bold">{favoriteToast}</span>
+                </div>
+                <span className="text-[10px] text-amber-300 font-quran">محفوظة في شريط الطالب</span>
+              </div>
+            )}
 
             <div className={`p-5 rounded-2xl border space-y-3 ${
               isIdgham

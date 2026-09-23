@@ -1,5 +1,5 @@
-import React from 'react';
-import { Course } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Course, GroupThemeConfig } from '../types';
 import { getAllCourses } from '../data/courses';
 import { isCourseUnlocked } from '../utils/studentProgressStorage';
 import { 
@@ -9,6 +9,9 @@ import {
   Search, Share2, LogOut, User
 } from 'lucide-react';
 import { WhatsAppSupport } from './WhatsAppSupport';
+import { getActiveThemeForStudent, subscribeGroupThemes, getEffectiveThemeStyle } from '../utils/groupThemeStorage';
+import { getStudentProfile, subscribeStudentProfile } from '../utils/studentStorage';
+import { InstituteLogo } from './InstituteLogo';
 
 interface HeaderProps {
   activeTab: string;
@@ -60,6 +63,22 @@ export const Header: React.FC<HeaderProps> = ({
   completedUnitsCount = 0,
 }) => {
   const [showCourseDropdown, setShowCourseDropdown] = React.useState(false);
+  const [activeTheme, setActiveTheme] = useState<GroupThemeConfig | null>(() => {
+    return getActiveThemeForStudent(getStudentProfile()?.group);
+  });
+
+  useEffect(() => {
+    const unsubProf = subscribeStudentProfile((p) => {
+      setActiveTheme(getActiveThemeForStudent(p?.group));
+    });
+    const unsubThemes = subscribeGroupThemes(() => {
+      setActiveTheme(getActiveThemeForStudent(getStudentProfile()?.group));
+    });
+    return () => {
+      unsubProf();
+      unsubThemes();
+    };
+  }, []);
 
   const navItems = [
     { id: 'cover', label: 'غلاف الحقيبة', icon: Book, count: 'غلاف رسمي' },
@@ -108,6 +127,20 @@ export const Header: React.FC<HeaderProps> = ({
               }`}>
                 <Users className="w-4 h-4 text-amber-300" />
                 <span>واجهة الطالب التفاعلية</span>
+              </div>
+            )}
+
+            {/* Customized Institute / Group Theme Pill */}
+            {activeTheme && (
+              <div 
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold font-quran shadow-sm bg-black/40 border-amber-400/60 text-amber-200"
+                title={`الواجهة مخصصة لمعهد: ${activeTheme.instituteName} - دفعة: ${activeTheme.groupName}`}
+              >
+                <InstituteLogo theme={activeTheme} className="w-4 h-4" iconClassName="w-3.5 h-3.5 text-amber-300" />
+                <span className="max-w-[140px] truncate">{activeTheme.instituteName}</span>
+                <span className="text-[10px] bg-amber-400/20 px-1.5 py-0.2 rounded text-amber-300">
+                  {activeTheme.groupName}
+                </span>
               </div>
             )}
           </div>
