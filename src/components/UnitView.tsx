@@ -6,7 +6,8 @@ import {
   BookOpen, Sparkles, CheckCircle2, HelpCircle, FileText, Layers, 
   ArrowRight, ArrowLeft, RotateCcw, Award, UserCheck, GitBranch, 
   ChevronDown, ChevronUp, Target, Eye, EyeOff, Lightbulb, Edit3, FolderSync,
-  Play, Video, ExternalLink, X, PlusCircle, Maximize2, AlertCircle, Heart
+  Play, Video, ExternalLink, X, PlusCircle, Maximize2, Minimize2, AlertCircle, Heart,
+  Type, AlignJustify
 } from 'lucide-react';
 import { saveSubmission } from '../utils/studentStorage';
 import { getUnitQuizQuestions, subscribeQuestionBank, UnitQuizQuestion } from '../utils/questionStorage';
@@ -29,6 +30,8 @@ interface UnitViewProps {
   isTeacherMode?: boolean;
   onNavigateToExam?: () => void;
   initialLessonIndex?: number;
+  isFocusMode?: boolean;
+  onToggleFocusMode?: () => void;
 }
 
 /** Helper to convert YouTube / Vimeo / MP4 URLs to embedded player source */
@@ -68,12 +71,31 @@ const getEmbedVideoData = (rawUrl?: string): { type: 'youtube' | 'vimeo' | 'vide
   };
 };
 
-/* Helper Component for Rendering Rich Structured Markdown Lesson Content */
-const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) => {
+/* Helper Component for Rendering Rich Structured Markdown Lesson Content with dynamic line spacing and font size */
+const FormattedLessonContent: React.FC<{ 
+  markdown: string;
+  fontSize?: 'sm' | 'base' | 'lg' | 'xl';
+  lineSpacing?: 'compact' | 'normal' | 'relaxed' | 'loose';
+}> = ({ markdown, fontSize = 'base', lineSpacing = 'normal' }) => {
   const lines = markdown.split('\n');
 
+  // Line spacing class mapper for optimal Arabic Quranic & educational reading
+  const lineSpacingClass = {
+    compact: 'leading-[1.8] space-y-3.5',
+    normal: 'leading-[2.2] space-y-5',
+    relaxed: 'leading-[2.6] space-y-6',
+    loose: 'leading-[3.0] space-y-7',
+  }[lineSpacing];
+
+  const fontSizeClass = {
+    sm: 'text-xs sm:text-sm',
+    base: 'text-sm sm:text-base',
+    lg: 'text-base sm:text-lg',
+    xl: 'text-lg sm:text-xl',
+  }[fontSize];
+
   return (
-    <div className="space-y-5 font-tajawal text-slate-800 text-sm sm:text-base leading-[2.1]">
+    <div className={`font-tajawal text-slate-800 dark:text-slate-200 transition-all duration-200 ${fontSizeClass} ${lineSpacingClass}`}>
       {lines.map((line, idx) => {
         const trimmed = line.trim();
         if (!trimmed) return null;
@@ -81,9 +103,9 @@ const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) =>
         // Level 3 Heading (###)
         if (trimmed.startsWith('### ')) {
           return (
-            <div key={idx} className="pt-4 pb-1 border-b-2 border-emerald-800/20 flex items-center gap-2.5">
-              <span className="w-2.5 h-6 bg-emerald-800 rounded-full inline-block shrink-0" />
-              <h3 className="text-base sm:text-lg font-bold font-quran text-emerald-950">
+            <div key={idx} className="pt-4 pb-1.5 border-b-2 border-emerald-800/20 dark:border-emerald-500/30 flex items-center gap-2.5">
+              <span className="w-2.5 h-6 bg-emerald-800 dark:bg-emerald-500 rounded-full inline-block shrink-0" />
+              <h3 className="text-base sm:text-xl font-bold font-quran text-emerald-950 dark:text-emerald-300">
                 {trimmed.replace('### ', '')}
               </h3>
             </div>
@@ -93,9 +115,9 @@ const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) =>
         // Level 4 Heading (####)
         if (trimmed.startsWith('#### ')) {
           return (
-            <div key={idx} className="bg-amber-50/80 p-3.5 rounded-xl border-r-4 border-amber-500 my-2">
-              <h4 className="text-sm sm:text-base font-bold font-quran text-amber-950 flex items-center gap-2">
-                <Lightbulb className="w-4 h-4 text-amber-600 shrink-0" />
+            <div key={idx} className="bg-amber-50/80 dark:bg-amber-950/40 p-3.5 rounded-xl border-r-4 border-amber-500 dark:border-amber-400 my-2">
+              <h4 className="text-sm sm:text-base font-bold font-quran text-amber-950 dark:text-amber-200 flex items-center gap-2">
+                <Lightbulb className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                 {trimmed.replace('#### ', '')}
               </h4>
             </div>
@@ -104,7 +126,7 @@ const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) =>
 
         // Separator (---)
         if (trimmed === '---') {
-          return <hr key={idx} className="my-4 border-slate-200" />;
+          return <hr key={idx} className="my-4 border-slate-200 dark:border-slate-800" />;
         }
 
         // Bullet Point (* or -)
@@ -112,8 +134,8 @@ const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) =>
           const content = trimmed.substring(2);
           return (
             <div key={idx} className="flex items-start gap-2.5 my-1.5 pr-2 sm:pr-4">
-              <span className="w-2 h-2 rounded-full bg-emerald-700 shrink-0 mt-2.5" />
-              <p className="text-slate-800 leading-relaxed">{renderInlineFormatting(content)}</p>
+              <span className="w-2 h-2 rounded-full bg-emerald-700 dark:bg-emerald-400 shrink-0 mt-2.5" />
+              <p className="text-slate-800 dark:text-slate-200">{renderInlineFormatting(content)}</p>
             </div>
           );
         }
@@ -123,11 +145,11 @@ const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) =>
           const numberMatch = trimmed.match(/^(\d+)\.\s(.*)/);
           if (numberMatch) {
             return (
-              <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 my-2 flex items-start gap-3">
-                <span className="w-7 h-7 rounded-lg bg-emerald-900 text-amber-300 font-bold font-quran text-xs flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+              <div key={idx} className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 my-2 flex items-start gap-3">
+                <span className="w-7 h-7 rounded-lg bg-emerald-900 dark:bg-emerald-800 text-amber-300 font-bold font-quran text-xs flex items-center justify-center shrink-0 shadow-sm mt-0.5">
                   0{numberMatch[1]}
                 </span>
-                <p className="text-slate-800 leading-relaxed text-sm sm:text-base">{renderInlineFormatting(numberMatch[2])}</p>
+                <p className="text-slate-800 dark:text-slate-200">{renderInlineFormatting(numberMatch[2])}</p>
               </div>
             );
           }
@@ -135,7 +157,7 @@ const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) =>
 
         // Standard Paragraph
         return (
-          <p key={idx} className="text-slate-800 leading-[2.2] my-1">
+          <p key={idx} className="text-slate-800 dark:text-slate-200 my-1">
             {renderInlineFormatting(trimmed)}
           </p>
         );
@@ -144,7 +166,7 @@ const FormattedLessonContent: React.FC<{ markdown: string }> = ({ markdown }) =>
   );
 };
 
-/* Helper to highlight Quranic verses ﴿...﴾ and bold text **...** */
+/* Helper to highlight Quranic verses ﴿...﴾ and bold text **...** with dark mode support */
 function renderInlineFormatting(text: string) {
   // Replace Quranic brackets ﴿...﴾ with golden badge styling
   const parts = text.split(/(﴿[^﴾]+﴾|\*\*[^*]+\*\*)/g);
@@ -152,14 +174,14 @@ function renderInlineFormatting(text: string) {
   return parts.map((part, i) => {
     if (part.startsWith('﴿') && part.endsWith('﴾')) {
       return (
-        <span key={i} className="font-quran text-amber-900 font-bold bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-lg mx-1 inline-block text-base sm:text-lg shadow-sm">
+        <span key={i} className="font-quran text-amber-900 dark:text-amber-200 font-bold bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-600/60 px-2 py-0.5 rounded-lg mx-1 inline-block text-base sm:text-lg shadow-sm">
           {part}
         </span>
       );
     }
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={i} className="font-bold text-emerald-950 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/80">
+        <strong key={i} className="font-bold text-emerald-950 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200/80 dark:border-emerald-800/80">
           {part.slice(2, -2)}
         </strong>
       );
@@ -174,6 +196,8 @@ export const UnitView: React.FC<UnitViewProps> = ({
   isTeacherMode = true, 
   onNavigateToExam,
   initialLessonIndex,
+  isFocusMode,
+  onToggleFocusMode,
 }) => {
   const [activeLessonIndex, setActiveLessonIndex] = useState<number>(initialLessonIndex ?? 0);
   const [viewMode, setViewMode] = useState<'lesson' | 'quiz' | 'atlas' | 'sifaat'>('lesson');
@@ -181,6 +205,63 @@ export const UnitView: React.FC<UnitViewProps> = ({
   const [showClassifierModal, setShowClassifierModal] = useState<boolean>(false);
   const [showTeacherGuide, setShowTeacherGuide] = useState<boolean>(false);
   const [favoriteToast, setFavoriteToast] = useState<string | null>(null);
+
+  // Focus Mode State & Reading Typography Scaling (Font size + Line spacing)
+  const [internalFocusMode, setInternalFocusMode] = useState<boolean>(false);
+  const effectiveFocusMode = isFocusMode !== undefined ? isFocusMode : internalFocusMode;
+
+  // Font size: 'sm' | 'base' | 'lg' | 'xl'
+  const [focusFontSize, setFocusFontSize] = useState<'sm' | 'base' | 'lg' | 'xl'>(() => {
+    try {
+      const saved = localStorage.getItem('tajweed_reading_font_size');
+      if (saved === 'sm' || saved === 'base' || saved === 'lg' || saved === 'xl') return saved;
+    } catch {}
+    return 'base';
+  });
+
+  // Line spacing: 'compact' | 'normal' | 'relaxed' | 'loose'
+  const [lineSpacing, setLineSpacing] = useState<'compact' | 'normal' | 'relaxed' | 'loose'>(() => {
+    try {
+      const saved = localStorage.getItem('tajweed_reading_line_spacing');
+      if (saved === 'compact' || saved === 'normal' || saved === 'relaxed' || saved === 'loose') return saved;
+    } catch {}
+    return 'normal';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tajweed_reading_font_size', focusFontSize);
+    } catch {}
+  }, [focusFontSize]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tajweed_reading_line_spacing', lineSpacing);
+    } catch {}
+  }, [lineSpacing]);
+
+  const handleToggleFocus = () => {
+    if (onToggleFocusMode) {
+      onToggleFocusMode();
+    } else {
+      setInternalFocusMode(prev => !prev);
+    }
+  };
+
+  // Keyboard shortcut (Escape) to exit focus mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && effectiveFocusMode) {
+        if (onToggleFocusMode) {
+          onToggleFocusMode();
+        } else {
+          setInternalFocusMode(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [effectiveFocusMode, onToggleFocusMode]);
 
   // Favorites tracking
   const [favoritedLessonIds, setFavoritedLessonIds] = useState<Set<string>>(() => {
@@ -394,9 +475,9 @@ export const UnitView: React.FC<UnitViewProps> = ({
   };
 
   return (
-    <div className="space-y-8">
-      {/* Teacher Mode Notice Banner */}
-      {isTeacherMode && (
+    <div className="space-y-6">
+      {/* Teacher Mode Notice Banner - Hidden in Focus Mode */}
+      {!effectiveFocusMode && isTeacherMode && (
         <div className="bg-amber-400/20 border-2 border-amber-400 text-slate-900 rounded-2xl p-4 text-xs sm:text-sm flex items-center justify-between gap-3 shadow-sm font-tajawal">
           <div className="flex items-center gap-2.5">
             <UserCheck className="w-5 h-5 text-amber-700 shrink-0" />
@@ -410,104 +491,237 @@ export const UnitView: React.FC<UnitViewProps> = ({
         </div>
       )}
 
-      {/* Unit Header Banner */}
-      <div className={`rounded-2xl p-6 sm:p-8 shadow-md border space-y-3 ${
-        isIdgham
-          ? 'bg-gradient-to-r from-indigo-950 via-purple-950 to-slate-950 text-white border-purple-800'
-          : 'bg-gradient-to-r from-emerald-950 via-emerald-900 to-slate-950 text-white border-emerald-800'
-      }`}>
-        <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
-          <BookOpen className="w-4 h-4 text-amber-400" />
-          <span>الوحدة التدريبية المقررة</span>
-          <span className={`px-2.5 py-0.5 rounded-full text-[10px] ${
-            isIdgham ? 'bg-purple-900 text-amber-200' : 'bg-emerald-800 text-amber-200'
-          }`}>
-            {unit.estimatedLectures}
-          </span>
-        </div>
+      {/* Sticky Focus Mode Top Toolbar */}
+      {effectiveFocusMode && (
+        <div className="sticky top-3 z-40 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3 sm:px-4 shadow-xl flex flex-wrap items-center justify-between gap-3 text-slate-200 no-print animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold font-quran bg-emerald-950 border border-emerald-700/70 text-emerald-300 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              وضع القراءة المركزة
+            </span>
+            <span className="text-slate-600 hidden sm:inline">·</span>
+            <span className="text-xs text-slate-300 font-bold font-quran hidden sm:inline truncate max-w-xs md:max-w-md">
+              الباب 0{unit.unitNumber} · {currentLesson.title}
+            </span>
+          </div>
 
-        <h1 className="text-2xl sm:text-3xl font-bold font-quran text-amber-100 leading-snug">
-          {unit.title}
-        </h1>
-        <p className={`text-xs sm:text-sm font-tajawal max-w-3xl leading-relaxed ${
-          isIdgham ? 'text-purple-100/90' : 'text-emerald-200/90'
-        }`}>
-          {unit.subtitle}
-        </p>
-
-        {/* Lesson Tabs Navigation */}
-        <div className={`flex flex-wrap items-center gap-2 pt-4 border-t ${
-          isIdgham ? 'border-purple-800/80' : 'border-emerald-800/80'
-        }`}>
-          {unit.lessons.map((lesson, idx) => {
-            const isLessonFav = favoritedLessonIds.has(makeLessonFavoriteId(courseId, unit.unitNumber, lesson.lessonNumber));
-            return (
+          <div className="flex items-center gap-2 mr-auto">
+            {/* Previous / Next Lesson Quick Stepper */}
+            <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
               <button
-                key={lesson.id}
                 onClick={() => {
-                  setActiveLessonIndex(idx);
-                  setViewMode('lesson');
+                  if (activeLessonIndex > 0) {
+                    setActiveLessonIndex(activeLessonIndex - 1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
                 }}
-                className={`px-4 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer ${
-                  viewMode === 'lesson' && activeLessonIndex === idx
-                    ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
-                    : isIdgham
-                    ? 'bg-purple-950/70 text-purple-200 hover:bg-purple-900'
-                    : 'bg-emerald-900/60 text-emerald-200 hover:bg-emerald-800'
+                disabled={activeLessonIndex === 0}
+                className={`px-2.5 py-1 rounded transition-colors flex items-center gap-1 ${
+                  activeLessonIndex === 0 
+                    ? 'text-slate-600 cursor-not-allowed' 
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer'
                 }`}
+                title="الانتقال للدرس السابق"
               >
-                <span>الدرس 0{lesson.lessonNumber}: {lesson.title.split(':')[1] || lesson.title}</span>
-                {isLessonFav && (
-                  <Heart className="w-3 h-3 fill-rose-500 text-rose-500 shrink-0" />
-                )}
+                <ArrowRight className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">السابق</span>
               </button>
-            );
-          })}
-
-          {/* Interactive Visual Atlas & Vocal Simulator Tabs - Exclusively for Makharij Course */}
-          {isMakharij && (
-            <>
+              <span className="text-slate-400 px-1.5 font-mono text-xs">
+                {activeLessonIndex + 1} / {unit.lessons.length}
+              </span>
               <button
-                onClick={() => setViewMode('atlas')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer shadow-sm ${
-                  viewMode === 'atlas'
-                    ? 'bg-amber-400 text-slate-950 shadow-md scale-105 font-black'
-                    : 'bg-emerald-900/90 hover:bg-emerald-800 text-amber-300 border border-amber-400/40'
+                onClick={() => {
+                  if (activeLessonIndex < unit.lessons.length - 1) {
+                    setActiveLessonIndex(activeLessonIndex + 1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                }}
+                disabled={activeLessonIndex === unit.lessons.length - 1}
+                className={`px-2.5 py-1 rounded transition-colors flex items-center gap-1 ${
+                  activeLessonIndex === unit.lessons.length - 1 
+                    ? 'text-slate-600 cursor-not-allowed' 
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer'
                 }`}
+                title="الانتقال للدرس التالي"
               >
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>أطلس المخارج المصور (الـ 17 مخرجاً)</span>
+                <span className="hidden md:inline">التالي</span>
+                <ArrowLeft className="w-3.5 h-3.5" />
               </button>
+            </div>
 
-              <button
-                onClick={() => setViewMode('sifaat')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer shadow-sm ${
-                  viewMode === 'sifaat'
-                    ? 'bg-amber-400 text-slate-950 shadow-md scale-105 font-black'
-                    : 'bg-indigo-950 hover:bg-indigo-900 text-indigo-200 border border-indigo-500/40'
-                }`}
-              >
-                <Layers className="w-4 h-4 text-indigo-300" />
-                <span>محاكي حركة الأوتار واللسان مع الصفات</span>
-              </button>
-            </>
-          )}
+            {/* Typography Controls: Font Size (A-/A+) & Line Spacing for Students */}
+            <div className="flex items-center gap-1.5 bg-slate-800 rounded-lg p-1 border border-slate-700 text-xs">
+              {/* Font Size Selector */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => {
+                    const sizes: ('sm' | 'base' | 'lg' | 'xl')[] = ['sm', 'base', 'lg', 'xl'];
+                    const currIdx = sizes.indexOf(focusFontSize);
+                    if (currIdx > 0) setFocusFontSize(sizes[currIdx - 1]);
+                  }}
+                  disabled={focusFontSize === 'sm'}
+                  className={`px-1.5 py-1 rounded transition-colors font-bold ${
+                    focusFontSize === 'sm' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer'
+                  }`}
+                  title="تصغير حجم الخط (طلاب معاهد القراءات)"
+                >
+                  <Type className="w-3 h-3 inline mr-0.5" />
+                  <span className="text-[11px]">-</span>
+                </button>
 
-          <button
-            onClick={() => setViewMode('quiz')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer ${
-              viewMode === 'quiz'
-                ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
-                : isIdgham
-                ? 'bg-indigo-900/90 text-amber-300 hover:bg-indigo-800 border border-purple-500/40'
-                : 'bg-purple-900/80 text-purple-200 hover:bg-purple-800'
-            }`}
-          >
-            <Award className="w-4 h-4 text-amber-300" />
-            <span>الاختبار القصير والمراجعة</span>
-          </button>
+                <span className="text-[11px] text-amber-300 px-1 font-mono font-bold select-none" title="حجم الخط الحالي">
+                  {focusFontSize === 'sm' ? 'صغير' : focusFontSize === 'base' ? 'متوسط' : focusFontSize === 'lg' ? 'كبير' : 'ضخم'}
+                </span>
+
+                <button
+                  onClick={() => {
+                    const sizes: ('sm' | 'base' | 'lg' | 'xl')[] = ['sm', 'base', 'lg', 'xl'];
+                    const currIdx = sizes.indexOf(focusFontSize);
+                    if (currIdx < sizes.length - 1) setFocusFontSize(sizes[currIdx + 1]);
+                  }}
+                  disabled={focusFontSize === 'xl'}
+                  className={`px-1.5 py-1 rounded transition-colors font-bold ${
+                    focusFontSize === 'xl' ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer'
+                  }`}
+                  title="تكبير حجم الخط (طلاب معاهد القراءات)"
+                >
+                  <Type className="w-3.5 h-3.5 inline mr-0.5" />
+                  <span className="text-[11px]">+</span>
+                </button>
+              </div>
+
+              <span className="text-slate-600">|</span>
+
+              {/* Line Spacing Selector */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => {
+                    const spacings: ('compact' | 'normal' | 'relaxed' | 'loose')[] = ['compact', 'normal', 'relaxed', 'loose'];
+                    const currIdx = spacings.indexOf(lineSpacing);
+                    const nextIdx = (currIdx + 1) % spacings.length;
+                    setLineSpacing(spacings[nextIdx]);
+                  }}
+                  className="px-2 py-1 rounded transition-colors text-slate-300 hover:text-white hover:bg-slate-700 cursor-pointer flex items-center gap-1"
+                  title="تبديل تباعد الأسطر (مضغوط / عادي / مريح / واسع لراحة العين)"
+                >
+                  <AlignJustify className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[11px] font-tajawal">
+                    {lineSpacing === 'compact' ? 'سطر: مضغوط' : lineSpacing === 'normal' ? 'سطر: عادي' : lineSpacing === 'relaxed' ? 'سطر: مريح' : 'سطر: واسع'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Exit Focus Mode Button */}
+            <button
+              onClick={handleToggleFocus}
+              className="bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="الخروج من وضع التركيز (Esc)"
+            >
+              <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>إنهاء التركيز</span>
+              <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">(Esc)</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Unit Header Banner - Calm, Serene, Eye-Friendly (Hidden in Focus Mode) */}
+      {!effectiveFocusMode && (
+        <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl p-5 sm:p-6 shadow-xs space-y-3">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-tajawal">
+            <BookOpen className="w-4 h-4 text-emerald-400" />
+            <span>الباب {unit.unitNumber} من الحقيبة</span>
+            <span aria-hidden="true" className="text-slate-600">·</span>
+            <span>{unit.estimatedLectures}</span>
+          </div>
+
+          <h1 className="text-xl sm:text-2xl font-bold font-quran text-slate-100 leading-snug">
+            {unit.title}
+          </h1>
+          <p className="text-xs sm:text-sm font-tajawal max-w-3xl text-slate-400 leading-relaxed">
+            {unit.subtitle}
+          </p>
+
+          {/* Lesson Tabs Navigation - Clean Segmented Control */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-800/80">
+            {unit.lessons.map((lesson, idx) => {
+              const isLessonFav = favoritedLessonIds.has(makeLessonFavoriteId(courseId, unit.unitNumber, lesson.lessonNumber));
+              const isActive = viewMode === 'lesson' && activeLessonIndex === idx;
+              return (
+                <button
+                  key={lesson.id}
+                  onClick={() => {
+                    setActiveLessonIndex(idx);
+                    setViewMode('lesson');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    isActive
+                      ? 'bg-slate-800 text-amber-300 font-bold border border-slate-700 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <span>الدرس 0{lesson.lessonNumber}: {lesson.title.split(':')[1] || lesson.title}</span>
+                  {isLessonFav && (
+                    <Heart className="w-3 h-3 fill-rose-500 text-rose-500 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Interactive Visual Atlas & Vocal Simulator Tabs - Exclusively for Makharij Course */}
+            {isMakharij && (
+              <>
+                <button
+                  onClick={() => setViewMode('atlas')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    viewMode === 'atlas'
+                      ? 'bg-slate-800 text-amber-300 font-bold border border-slate-700 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>أطلس المخارج</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode('sifaat')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    viewMode === 'sifaat'
+                      ? 'bg-slate-800 text-amber-300 font-bold border border-slate-700 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>محاكي الصفات</span>
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={() => setViewMode('quiz')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'quiz'
+                  ? 'bg-slate-800 text-amber-300 font-bold border border-slate-700 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 text-amber-400" />
+              <span>الاختبار والمراجعة</span>
+            </button>
+
+            {/* Focus Mode Button in Lesson Tab Bar */}
+            <button
+              onClick={handleToggleFocus}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer text-emerald-300 hover:text-emerald-100 hover:bg-emerald-950/60 border border-emerald-800/80 mr-auto"
+              title="تفعيل وضع القراءة المركزة وإخفاء جميع المشتتات"
+            >
+              <Eye className="w-3.5 h-3.5 text-emerald-400" />
+              <span>وضع القراءة المركزة</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {viewMode === 'atlas' && (
         <div className="space-y-6">
@@ -526,50 +740,130 @@ export const UnitView: React.FC<UnitViewProps> = ({
         <div className="space-y-8">
           
           {/* STEP 1: Educational Objectives */}
-          <div className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 font-bold text-sm flex items-center justify-center shrink-0 font-quran shadow-sm">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center shrink-0 font-mono border border-slate-200 dark:border-slate-700">
                   0{currentLesson.lessonNumber}
                 </div>
                 <div>
-                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full font-tajawal border border-amber-200">
-                    أولاً: الأهداف التربوية والتعليمية للدرس
-                  </span>
-                  <h2 className="text-xl sm:text-2xl font-bold font-quran text-slate-900 mt-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-tajawal">
+                    الأهداف التعليمية ومخرجات الدرس
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-bold font-quran text-slate-900 dark:text-slate-100 mt-0.5">
                     {currentLesson.title}
                   </h2>
-                  <p className="text-xs text-slate-500 font-tajawal">{currentLesson.subtitle}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-tajawal">{currentLesson.subtitle}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Reading Typography Controls for Students (Font size & Line Spacing) */}
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                  {/* Font Size A- / A+ */}
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => {
+                        const sizes: ('sm' | 'base' | 'lg' | 'xl')[] = ['sm', 'base', 'lg', 'xl'];
+                        const currIdx = sizes.indexOf(focusFontSize);
+                        if (currIdx > 0) setFocusFontSize(sizes[currIdx - 1]);
+                      }}
+                      disabled={focusFontSize === 'sm'}
+                      className={`px-1.5 py-1 rounded-lg transition-colors font-bold ${
+                        focusFontSize === 'sm' ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed' : 'text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700'
+                      }`}
+                      title="تصغير حجم الخط"
+                    >
+                      A-
+                    </button>
+                    <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 font-bold px-1 select-none">
+                      {focusFontSize === 'sm' ? '85%' : focusFontSize === 'base' ? '100%' : focusFontSize === 'lg' ? '115%' : '130%'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const sizes: ('sm' | 'base' | 'lg' | 'xl')[] = ['sm', 'base', 'lg', 'xl'];
+                        const currIdx = sizes.indexOf(focusFontSize);
+                        if (currIdx < sizes.length - 1) setFocusFontSize(sizes[currIdx + 1]);
+                      }}
+                      disabled={focusFontSize === 'xl'}
+                      className={`px-1.5 py-1 rounded-lg transition-colors font-bold ${
+                        focusFontSize === 'xl' ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed' : 'text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700'
+                      }`}
+                      title="تكبير حجم الخط"
+                    >
+                      A+
+                    </button>
+                  </div>
+
+                  <span className="text-slate-300 dark:text-slate-600">|</span>
+
+                  {/* Line Spacing Quick Toggle */}
+                  <button
+                    onClick={() => {
+                      const spacings: ('compact' | 'normal' | 'relaxed' | 'loose')[] = ['compact', 'normal', 'relaxed', 'loose'];
+                      const currIdx = spacings.indexOf(lineSpacing);
+                      const nextIdx = (currIdx + 1) % spacings.length;
+                      setLineSpacing(spacings[nextIdx]);
+                    }}
+                    className="px-2 py-1 rounded-lg transition-colors text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer"
+                    title="تبديل تباعد الأسطر لراحة القراءة"
+                  >
+                    <AlignJustify className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[11px] font-tajawal hidden md:inline">
+                      {lineSpacing === 'compact' ? 'مضغوط' : lineSpacing === 'normal' ? 'عادي' : lineSpacing === 'relaxed' ? 'مريح' : 'واسع'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Focus Mode Button */}
+                <button
+                  onClick={handleToggleFocus}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer border ${
+                    effectiveFocusMode
+                      ? 'bg-emerald-700 dark:bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:border-emerald-300'
+                  }`}
+                  title={effectiveFocusMode ? 'إنهاء وضع القراءة المركزة' : 'تفعيل وضع القراءة المركزة بدون أي مشتتات'}
+                >
+                  {effectiveFocusMode ? (
+                    <>
+                      <Minimize2 className="w-3.5 h-3.5 text-emerald-200" />
+                      <span className="font-tajawal">إنهاء التركيز</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="font-tajawal">وضع القراءة المركزة</span>
+                    </>
+                  )}
+                </button>
+
                 {/* Heart Favorite Button */}
                 <button
                   onClick={handleToggleFavorite}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center gap-2 cursor-pointer border shadow-sm ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer border ${
                     isCurrentLessonFavorited
-                      ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 ring-2 ring-rose-400/30'
-                      : 'bg-white border-slate-200 text-slate-700 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50/40'
+                      ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800'
                   }`}
                   title={isCurrentLessonFavorited ? 'إزالة هذا الدرس من دروسي المفضلة' : 'حفظ هذا الدرس في دروسي المفضلة'}
                 >
-                  <Heart className={`w-4 h-4 transition-transform duration-300 ${
-                    isCurrentLessonFavorited ? 'fill-rose-500 text-rose-500 scale-110' : 'text-slate-400 hover:text-rose-500'
+                  <Heart className={`w-3.5 h-3.5 ${
+                    isCurrentLessonFavorited ? 'fill-rose-500 text-rose-500' : 'text-slate-400'
                   }`} />
                   <span className="font-tajawal">
-                    {isCurrentLessonFavorited ? 'مُفضّل ❤️' : 'أضف للمفضلة'}
+                    {isCurrentLessonFavorited ? 'مُفضّل' : 'حفظ للمفضلة'}
                   </span>
                 </button>
 
                 {isTeacherMode && (
                   <button
                     onClick={() => setShowClassifierModal(true)}
-                    className="bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-3.5 py-2 rounded-xl text-xs font-bold font-quran flex items-center gap-1.5 transition-all shadow-sm cursor-pointer shrink-0"
+                    className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg text-xs font-tajawal flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
                     title="تصنيف ونقل هذا الدرس إلى حقيبة أو مستوى دراسي آخر أو إنشاء حقيبة جديدة له"
                   >
-                    <FolderSync className="w-4 h-4 text-amber-800" />
-                    <span>تصنيف / نقل هذا الدرس</span>
+                    <FolderSync className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+                    <span>تصنيف / نقل الدرس</span>
                   </button>
                 )}
               </div>
@@ -588,22 +882,22 @@ export const UnitView: React.FC<UnitViewProps> = ({
 
             <div className={`p-5 rounded-2xl border space-y-3 ${
               isIdgham
-                ? 'bg-purple-50/80 border-purple-200'
-                : 'bg-emerald-50/80 border-emerald-200'
+                ? 'bg-purple-50/80 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/60'
+                : 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
             }`}>
               <span className={`font-bold font-quran text-sm flex items-center gap-2 ${
-                isIdgham ? 'text-purple-950' : 'text-emerald-950'
+                isIdgham ? 'text-purple-950 dark:text-purple-200' : 'text-emerald-950 dark:text-emerald-200'
               }`}>
-                <Target className={`w-5 h-5 ${isIdgham ? 'text-purple-700' : 'text-emerald-700'}`} />
+                <Target className={`w-5 h-5 ${isIdgham ? 'text-purple-700 dark:text-purple-400' : 'text-emerald-700 dark:text-emerald-400'}`} />
                 المخرجات والنتائج التعليمية المتوقعة بنهاية الدرس:
               </span>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs sm:text-sm text-slate-800 font-tajawal">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs sm:text-sm text-slate-800 dark:text-slate-200 font-tajawal">
                 {currentLesson.objectives.map((obj, i) => (
-                  <div key={i} className={`bg-white p-3 rounded-xl border flex items-start gap-2 shadow-sm ${
-                    isIdgham ? 'border-purple-200/80' : 'border-emerald-200/80'
+                  <div key={i} className={`bg-white dark:bg-slate-900/90 p-3 rounded-xl border flex items-start gap-2 shadow-sm ${
+                    isIdgham ? 'border-purple-200/80 dark:border-purple-800/50' : 'border-emerald-200/80 dark:border-emerald-800/50'
                   }`}>
                     <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${
-                      isIdgham ? 'text-purple-700' : 'text-emerald-600'
+                      isIdgham ? 'text-purple-700 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'
                     }`} />
                     <span className="leading-relaxed">{obj}</span>
                   </div>
@@ -693,16 +987,22 @@ export const UnitView: React.FC<UnitViewProps> = ({
           ) : null}
 
           {/* STEP 2: Explanation & Scientific Content */}
-          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-5">
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-              <BookOpen className="w-5 h-5 text-emerald-800" />
-              <h3 className="text-lg font-bold font-quran text-slate-900">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <BookOpen className="w-5 h-5 text-emerald-800 dark:text-emerald-400" />
+              <h3 className="text-lg font-bold font-quran text-slate-900 dark:text-slate-100">
                 ثانياً: الشرح والتأصيل العلمي والمعرفي
               </h3>
             </div>
 
-            {/* Rendered Structured Markdown */}
-            <FormattedLessonContent markdown={currentLesson.contentMarkdown} />
+            {/* Rendered Structured Markdown with dynamic font size and line spacing for Students */}
+            <div>
+              <FormattedLessonContent 
+                markdown={currentLesson.contentMarkdown} 
+                fontSize={focusFontSize}
+                lineSpacing={lineSpacing}
+              />
+            </div>
           </div>
 
           {/* STEP 3: Interactive Diagram Tree & Concept Map (Toggleable Icon Button) */}
@@ -743,19 +1043,19 @@ export const UnitView: React.FC<UnitViewProps> = ({
 
           {/* STEP 4: Quranic Evidence Analysis Laboratory */}
           {currentLesson.examples && currentLesson.examples.length > 0 && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <FileText className="w-5 h-5 text-emerald-800" />
-                <h3 className="text-lg font-bold font-quran text-slate-900">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <FileText className="w-5 h-5 text-emerald-800 dark:text-emerald-400" />
+                <h3 className="text-lg font-bold font-quran text-slate-900 dark:text-slate-100">
                   رابعاً: تحليل الشواهد والأمثلة القرآنية التطبيقية
                 </h3>
               </div>
 
               <div className="space-y-4">
                 {currentLesson.examples.map((ex, i) => (
-                  <div key={i} className="bg-emerald-50/40 rounded-2xl p-5 border border-emerald-200 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 pb-3">
-                      <div className="font-quran text-lg font-bold text-slate-900 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
+                  <div key={i} className="bg-emerald-50/40 dark:bg-slate-950/60 rounded-2xl p-5 border border-emerald-200 dark:border-slate-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 dark:border-slate-800 pb-3">
+                      <div className="font-quran text-lg font-bold text-slate-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/50 px-4 py-2 rounded-xl border border-amber-200 dark:border-amber-700/50">
                         ﴿{ex.targetPhrase}﴾ — سورة {ex.surahName}: {ex.ayahNumber}
                       </div>
                       <span className="text-xs font-bold bg-emerald-900 text-amber-300 px-3 py-1 rounded-full shrink-0">
@@ -764,17 +1064,17 @@ export const UnitView: React.FC<UnitViewProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                      <div className="bg-white p-3 rounded-xl border border-slate-200">
-                        <span className="font-bold text-slate-500 block">الساكن الأول:</span>
-                        <span className="font-bold text-slate-900">{ex.firstSukoon}</span>
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span className="font-bold text-slate-500 dark:text-slate-400 block">الساكن الأول:</span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{ex.firstSukoon}</span>
                       </div>
-                      <div className="bg-white p-3 rounded-xl border border-slate-200">
-                        <span className="font-bold text-slate-500 block">الساكن الثاني:</span>
-                        <span className="font-bold text-slate-900">{ex.secondSukoon}</span>
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span className="font-bold text-slate-500 dark:text-slate-400 block">الساكن الثاني:</span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{ex.secondSukoon}</span>
                       </div>
-                      <div className="bg-white p-3 rounded-xl border border-slate-200">
-                        <span className="font-bold text-slate-500 block">سبب الالتقاء:</span>
-                        <span className="text-slate-800">{ex.reason}</span>
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span className="font-bold text-slate-500 dark:text-slate-400 block">سبب الالتقاء:</span>
+                        <span className="text-slate-800 dark:text-slate-200">{ex.reason}</span>
                       </div>
                     </div>
 
@@ -783,9 +1083,9 @@ export const UnitView: React.FC<UnitViewProps> = ({
                     </div>
 
                     {ex.qiraatNote && (
-                      <div className="bg-amber-100/90 border border-amber-300 text-slate-900 p-3.5 rounded-xl text-xs font-tajawal leading-relaxed space-y-1">
-                        <span className="font-bold text-amber-950 font-quran flex items-center gap-1.5">
-                          <BookOpen className="w-4 h-4 text-amber-800" />
+                      <div className="bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-amber-100 p-3.5 rounded-xl text-xs font-tajawal leading-relaxed space-y-1">
+                        <span className="font-bold text-amber-950 dark:text-amber-300 font-quran flex items-center gap-1.5">
+                          <BookOpen className="w-4 h-4 text-amber-800 dark:text-amber-400" />
                           توجيه القراءات القرائية وتنوع الروايات:
                         </span>
                         <p>{ex.qiraatNote}</p>
@@ -800,21 +1100,21 @@ export const UnitView: React.FC<UnitViewProps> = ({
           {/* STEP 5: Exercises, Discussion, Homework & Recitation */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Exercises Box */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-              <div className="font-bold text-slate-900 font-quran text-base border-b border-slate-100 pb-2 flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-amber-600" />
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="font-bold text-slate-900 dark:text-slate-100 font-quran text-base border-b border-slate-100 dark:border-slate-800 pb-2 flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 <span>خامساً: تدريبات وتطبيقات الدرس المتدرجة:</span>
               </div>
 
               <div className="space-y-3">
                 {currentLesson.exercises.map((ex, i) => (
-                  <div key={`ex_${unit.id}_${activeLessonIndex}_${i}`} className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
-                    <div className="font-bold text-emerald-950 font-quran text-sm">{ex.title}</div>
-                    <p className="text-slate-700 leading-relaxed">{ex.question}</p>
+                  <div key={`ex_${unit.id}_${activeLessonIndex}_${i}`} className="bg-slate-50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+                    <div className="font-bold text-emerald-950 dark:text-emerald-300 font-quran text-sm">{ex.title}</div>
+                    <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{ex.question}</p>
                     
                     {isTeacherMode ? (
-                      <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 text-emerald-900 font-bold flex items-center gap-2">
-                        <UserCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <div className="bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-bold flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                         <span>الإجابة النموذجية (دليل المعلم): {ex.correctAnswer}</span>
                       </div>
                     ) : (
@@ -822,13 +1122,13 @@ export const UnitView: React.FC<UnitViewProps> = ({
                         <input
                           type="text"
                           placeholder="اكتب إجابتك للتطبيق هنا..."
-                          className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-amber-500 font-tajawal text-right"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs focus:ring-2 focus:ring-amber-500 font-tajawal text-right text-slate-900 dark:text-slate-100"
                         />
-                        <details className="text-slate-600 bg-white border border-slate-200 rounded-lg p-2 cursor-pointer">
-                          <summary className="font-bold text-amber-800 text-[11px] font-quran select-none">
+                        <details className="text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 cursor-pointer">
+                          <summary className="font-bold text-amber-800 dark:text-amber-400 text-[11px] font-quran select-none">
                             انقر هنا لعرض نموذج الإجابة للتحقق بعد المحاولة
                           </summary>
-                          <p className="mt-2 text-xs font-bold text-emerald-900 bg-emerald-50 p-2 rounded border border-emerald-200">
+                          <p className="mt-2 text-xs font-bold text-emerald-900 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 p-2 rounded border border-emerald-200 dark:border-emerald-800">
                             الإجابة الصحيحة: {ex.correctAnswer}
                           </p>
                         </details>
@@ -840,10 +1140,10 @@ export const UnitView: React.FC<UnitViewProps> = ({
             </div>
 
             {/* Homework & Discussion Box */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-              <div className="font-bold text-slate-900 font-quran text-base border-b border-slate-100 pb-2 flex items-center gap-2 justify-between flex-wrap">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="font-bold text-slate-900 dark:text-slate-100 font-quran text-base border-b border-slate-100 dark:border-slate-800 pb-2 flex items-center gap-2 justify-between flex-wrap">
                 <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-emerald-700" />
+                  <FileText className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
                   <span>أسئلة المناقشة والواجب المنزلي والتلاوة:</span>
                 </div>
                 {isTeacherGuideActive ? (
@@ -996,7 +1296,7 @@ export const UnitView: React.FC<UnitViewProps> = ({
           </div>
 
           {/* Lesson Navigation Controls */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 font-tajawal">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 font-tajawal">
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
               <button
                 type="button"
@@ -1006,15 +1306,15 @@ export const UnitView: React.FC<UnitViewProps> = ({
                 }}
                 className={`px-4 py-2.5 rounded-xl font-bold font-quran text-xs flex items-center gap-2 transition-all cursor-pointer ${
                   activeLessonIndex === 0
-                    ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 shadow-sm'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                    : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm'
                 }`}
               >
                 <ArrowRight className="w-4 h-4" />
                 <span>الدرس السابق</span>
               </button>
 
-              <span className="text-xs font-bold text-slate-600 font-sans">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-400 font-sans">
                 {activeLessonIndex + 1} / {unit.lessons.length}
               </span>
 
@@ -1075,6 +1375,50 @@ export const UnitView: React.FC<UnitViewProps> = ({
                 >
                   <Award className="w-4 h-4 text-slate-950" />
                   <span>بدء الاختبار (35 سؤالاً) الآن ❯</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Focus Mode Bottom Navigation */}
+          {effectiveFocusMode && (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-200 font-tajawal shadow-sm no-print">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="text-emerald-300 font-bold font-quran">انتهى الدرس {currentLesson.lessonNumber}</span>
+                <span className="text-slate-600">·</span>
+                <span className="text-slate-400">
+                  {activeLessonIndex + 1} من أصل {unit.lessons.length} دروس في هذا الباب
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {activeLessonIndex < unit.lessons.length - 1 ? (
+                  <button
+                    onClick={() => {
+                      setActiveLessonIndex(activeLessonIndex + 1);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold font-quran px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer text-xs shadow-xs"
+                  >
+                    <span>الانتقال للدرس التالي ❯</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleToggleFocus}
+                    className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold font-quran px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer text-xs shadow-xs"
+                  >
+                    <span>إتمام قراءة الباب والعودة للواجهة الكاملة</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleToggleFocus}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer border border-slate-700"
+                  title="إنهاء وضع التركيز (Esc)"
+                >
+                  <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>إنهاء وضع التركيز</span>
                 </button>
               </div>
             </div>

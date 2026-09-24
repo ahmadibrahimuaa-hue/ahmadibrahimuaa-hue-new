@@ -96,7 +96,7 @@ export const loadMultiProgress = (): MultiCourseProgressData => {
   return currentMultiProgress;
 };
 
-export const getStudentProgress = (courseId: string = 'sakinan'): SingleCourseProgress => {
+export const getStudentProgress = (courseId: string = 'foundational_rules'): SingleCourseProgress => {
   const multi = loadMultiProgress();
   if (!multi.courses[courseId]) {
     multi.courses[courseId] = getDefaultSingleProgress();
@@ -129,7 +129,7 @@ const syncProgressToFirestore = async (courseId: string, data: SingleCourseProgr
   }
 };
 
-export const markUnitCompleted = async (unitNumber: number, completed: boolean = true, courseId: string = 'sakinan') => {
+export const markUnitCompleted = async (unitNumber: number, completed: boolean = true, courseId: string = 'foundational_rules') => {
   const multi = { ...loadMultiProgress() };
   const prevProg = { ...getStudentProgress(courseId) };
   const prog = { ...prevProg };
@@ -361,13 +361,24 @@ export const getCourseLockDetails = (
     };
   }
 
+  if (courseId === 'foundational_rules') {
+    return {
+      isUnlocked: true,
+      statusType: 'default_unlocked',
+      badgeText: 'الحقيبة التأسيسية الأولى (مفتوحة تلقائياً) 🟢',
+      badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-500',
+      explanation: 'الحقيبة التأسيسية الأولى (أصول التلاوة) مفتوحة لجميع الطلاب تلقائياً.',
+      isExplicitTeacherAction: false,
+    };
+  }
+
   if (courseId === 'sakinan') {
     return {
       isUnlocked: true,
       statusType: 'default_unlocked',
       badgeText: 'مفتوحة ومتاحة للجميع 🟢',
       badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-500',
-      explanation: 'الحقيبة التأسيسية الأولى مفتوحة لجميع الطلاب تلقائياً.',
+      explanation: 'حقيبة قواعد التقاء الساكنين مفتوحة ومتاحة للجميع.',
       isExplicitTeacherAction: false,
     };
   }
@@ -414,8 +425,8 @@ export const isCourseUnlocked = (
   return getCourseLockDetails(courseId, isTeacherMode, courseObj).isUnlocked;
 };
 
-export const calculateProgressPercentage = (prog?: SingleCourseProgress, totalUnitsCount: number = 5): number => {
-  const p = prog || getStudentProgress('sakinan');
+export const calculateProgressPercentage = (prog?: SingleCourseProgress, totalUnitsCount: number = 4): number => {
+  const p = prog || getStudentProgress('foundational_rules');
   
   const unitWeight = (p.completedUnitNumbers.length / Math.max(1, totalUnitsCount)) * 50;
   
@@ -431,7 +442,7 @@ export const calculateProgressPercentage = (prog?: SingleCourseProgress, totalUn
   return Math.min(100, Math.max(0, total));
 };
 
-export const getBadges = (prog: SingleCourseProgress = getStudentProgress('sakinan'), courseTitle: string = 'التقاء الساكنين') => {
+export const getBadges = (prog: SingleCourseProgress = getStudentProgress('foundational_rules'), courseTitle: string = 'أصول التلاوة والتأسيس') => {
   const percent = calculateProgressPercentage(prog);
   const badges = [];
 

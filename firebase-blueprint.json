@@ -29,7 +29,10 @@
         "updatedAt": { "type": "number" },
         "trainerId": { "type": "string" },
         "trainerName": { "type": "string" },
-        "referralCode": { "type": "string" }
+        "referralCode": { "type": "string" },
+        "enrolledCourseId": { "type": "string" },
+        "group": { "type": "string" },
+        "instituteName": { "type": "string" }
       },
       "required": ["name", "registeredAt"]
     },
@@ -69,6 +72,27 @@
         "trainerName": { "type": "string" }
       },
       "required": ["courseId", "courseTitle", "studentName", "status", "registeredAt"]
+    },
+    "settings": {
+      "title": "Platform Settings",
+      "description": "Global and home configuration settings including customizable titles and banners",
+      "type": "object",
+      "properties": {
+        "mainTitle": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "authorText": { "type": "string" },
+        "platformBadgeText": { "type": "string" },
+        "introParagraph": { "type": "string" },
+        "announcementText": { "type": "string" },
+        "showAnnouncement": { "type": "boolean" },
+        "announcementType": { "type": "string" },
+        "defaultViewMode": { "type": "string" },
+        "featuredCourseId": { "type": "string" },
+        "showFavoritesStrip": { "type": "boolean" },
+        "showStatsCounter": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["updatedAt"]
     }
   }
 }

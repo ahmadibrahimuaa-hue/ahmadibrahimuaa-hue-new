@@ -22,7 +22,7 @@ import { QuranFontModal } from './components/QuranFontModal';
 import { getStudentProgress, subscribeStudentProgress, calculateProgressPercentage, markSectionRead, isCourseUnlocked, isCoursePassed } from './utils/studentProgressStorage';
 import { getStudentProfile, subscribeStudentProfile } from './utils/studentStorage';
 import { getCurrentAuthTrainer, setCurrentAuthTrainer, SUPER_ADMIN_ACCOUNT, subscribeTrainers, getAllTrainersAsync, clearStaleAuthSessions } from './utils/trainerStorage';
-import { getAllCourses, SAKINAN_COURSE, getCourseById } from './data/courses';
+import { getAllCourses, SAKINAN_COURSE, FOUNDATIONAL_RULES_COURSE, DEFAULT_COURSE_ID, getCourseById } from './data/courses';
 import { subscribeCourses } from './utils/courseCustomStorage';
 import { Course, StudentProfile, TrainerAccount } from './types';
 import { SUMMARY_TABLE_DATA } from './data/summaryData';
@@ -30,6 +30,8 @@ import { WhatsAppSupport, FloatingWhatsAppSupport } from './components/WhatsAppS
 import { SakinanSearchBar } from './components/SakinanSearchBar';
 import { SakinanSearchResult } from './utils/sakinanSearchEngine';
 import { ShareAchievementModal } from './components/ShareAchievementModal';
+import { FavoriteLessonsModal } from './components/FavoriteLessonsModal';
+import { CourseSidebar } from './components/CourseSidebar';
 import { logoutStudent } from './utils/studentStorage';
 import { 
   BookOpen, GraduationCap, Table, Bookmark, Book, 
@@ -39,8 +41,8 @@ import {
 
 export default function App() {
   const [coursesList, setCoursesList] = useState<Course[]>(() => getAllCourses());
-  const [activeCourseId, setActiveCourseId] = useState<string>('sakinan');
-  const [activeTab, setActiveTab] = useState<string>('cover');
+  const [activeCourseId, setActiveCourseId] = useState<string>(() => DEFAULT_COURSE_ID);
+  const [activeTab, setActiveTab] = useState<string>('home');
   const [selectedUnitIndex, setSelectedUnitIndex] = useState<number>(0);
   const [selectedLessonIndex, setSelectedLessonIndex] = useState<number>(0);
   const [isExamActive, setIsExamActive] = useState<boolean>(false);
@@ -49,6 +51,27 @@ export default function App() {
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [showLogoutConfirmModal, setShowLogoutConfirmModal] = useState<boolean>(false);
+  const [showFavoritesModal, setShowFavoritesModal] = useState<boolean>(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+
+  // Focus mode exit on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFocusMode) {
+        setIsFocusMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFocusMode]);
+
+  // Turn off focus mode if navigating away from units tab
+  useEffect(() => {
+    if (activeTab !== 'units' && isFocusMode) {
+      setIsFocusMode(false);
+    }
+  }, [activeTab, isFocusMode]);
 
   // Keyboard shortcut (Ctrl+K or Cmd+K) to open search
   useEffect(() => {
@@ -75,7 +98,7 @@ export default function App() {
   const handleNavigateToLesson = (courseId: string, unitNumber: number, lessonNumber: number) => {
     setActiveCourseId(courseId);
     setActiveTab('units');
-    const courseObj = getCourseById(courseId) || SAKINAN_COURSE;
+    const courseObj = getCourseById(courseId) || FOUNDATIONAL_RULES_COURSE;
     const uIdx = courseObj.units?.findIndex((u) => u.unitNumber === unitNumber) ?? -1;
     const targetUnitIndex = uIdx >= 0 ? uIdx : 0;
     setSelectedUnitIndex(targetUnitIndex);
@@ -100,8 +123,8 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  const activeCourse: Course = getCourseById(activeCourseId) || SAKINAN_COURSE;
-  const totalUnitsInCourse = activeCourse && activeCourse.units ? activeCourse.units.length : 5;
+  const activeCourse: Course = getCourseById(activeCourseId) || FOUNDATIONAL_RULES_COURSE;
+  const totalUnitsInCourse = activeCourse && activeCourse.units ? activeCourse.units.length : 4;
 
   // Night Reading Mode state
   const [isNightMode, setIsNightMode] = useState<boolean>(() => {
@@ -251,61 +274,106 @@ export default function App() {
   const shouldShowLockedPreview = !isTeacherMode && (!isCourseActiveUnlocked || isComingSoon || isLockedStatus);
 
   return (
-    <div className={`min-h-screen font-tajawal flex flex-col justify-between selection:bg-emerald-100 selection:text-emerald-900 transition-colors duration-300 ${
-      isNightMode ? 'bg-slate-950 text-slate-100 dark' : 'bg-slate-50 text-slate-800'
+    <div className={`min-h-screen font-tajawal flex flex-col justify-between selection:bg-amber-200/60 selection:text-amber-950 transition-colors duration-300 ${
+      isNightMode ? 'bg-[#0b0f19] text-slate-100 dark' : 'bg-[#F8F5EC] text-stone-800'
     }`}>
       <div>
-        {/* Header Navigation */}
-        <Header
-          activeCourse={activeCourse}
-          onSelectCourse={(cId) => {
-            setActiveCourseId(cId);
-            setActiveTab('cover');
-            setSelectedUnitIndex(0);
-          }}
-          onReturnToHome={() => setActiveTab('home')}
-          onOpenBagManagement={() => setShowBagManagementModal(true)}
-          activeTab={activeTab}
-          setActiveTab={(tab) => {
-            if (isExamActive && tab !== 'exam') return;
-            if (!isTeacherMode && tab !== 'home' && (!studentProfile || !studentProfile.name || !studentProfile.name.trim())) {
-              setShowRegistrationModal(true);
-              return;
-            }
-            if (tab === 'exam' && !isTeacherMode && completedUnitsCount < totalUnitsInCourse) {
-              setShowExamLockedModal(true);
-            }
-            setActiveTab(tab);
-          }}
-          isExamActive={isExamActive}
-          isTeacherMode={isTeacherMode}
-          setIsTeacherMode={setIsTeacherMode}
-          onUnlockTeacherModal={() => setShowAuthModal(true)}
-          onOpenTeacherDashboard={() => {
-            setTeacherDashboardTab('submissions');
-            setShowTeacherDashboard(true);
-          }}
-          onOpenCertificateEditor={() => {
-            setTeacherDashboardTab('certificate');
-            setShowTeacherDashboard(true);
-          }}
-          isNightMode={isNightMode}
-          setIsNightMode={setIsNightMode}
-          onOpenProgressModal={() => setShowProgressModal(true)}
-          onOpenFontModal={() => setShowFontModal(true)}
-          onOpenSearch={() => setShowSearchModal(true)}
-          onOpenShareModal={() => setShowShareModal(true)}
-          onLogoutStudent={() => setShowLogoutConfirmModal(true)}
-          studentName={studentProfile?.name}
-          progressPercentage={progressPct}
-          completedUnitsCount={completedUnitsCount}
-        />
+        {/* Minimalist Top App Header (Hidden in Focus Mode) */}
+        {!isFocusMode && (
+          <Header
+            activeCourse={activeCourse}
+            onSelectCourse={(cId) => {
+              setActiveCourseId(cId);
+              setActiveTab('cover');
+              setSelectedUnitIndex(0);
+            }}
+            onReturnToHome={() => setActiveTab('home')}
+            onOpenBagManagement={() => setShowBagManagementModal(true)}
+            activeTab={activeTab}
+            setActiveTab={(tab) => {
+              if (isExamActive && tab !== 'exam') return;
+              if (!isTeacherMode && tab !== 'home' && (!studentProfile || !studentProfile.name || !studentProfile.name.trim())) {
+                setShowRegistrationModal(true);
+                return;
+              }
+              if (tab === 'exam' && !isTeacherMode && completedUnitsCount < totalUnitsInCourse) {
+                setShowExamLockedModal(true);
+              }
+              setActiveTab(tab);
+            }}
+            isExamActive={isExamActive}
+            isTeacherMode={isTeacherMode}
+            setIsTeacherMode={setIsTeacherMode}
+            onUnlockTeacherModal={() => setShowAuthModal(true)}
+            onOpenTeacherDashboard={() => {
+              setTeacherDashboardTab('submissions');
+              setShowTeacherDashboard(true);
+            }}
+            onOpenCertificateEditor={() => {
+              setTeacherDashboardTab('certificate');
+              setShowTeacherDashboard(true);
+            }}
+            isNightMode={isNightMode}
+            setIsNightMode={setIsNightMode}
+            onOpenProgressModal={() => setShowProgressModal(true)}
+            onOpenFontModal={() => setShowFontModal(true)}
+            onOpenSearch={() => setShowSearchModal(true)}
+            onOpenShareModal={() => setShowShareModal(true)}
+            onLogoutStudent={() => setShowLogoutConfirmModal(true)}
+            studentName={studentProfile?.name}
+            progressPercentage={progressPct}
+            completedUnitsCount={completedUnitsCount}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            isSidebarOpen={isSidebarOpen}
+          />
+        )}
+
+        {/* Collapsible Sidebar for Navigation & Course Structure (Hidden in Focus Mode) */}
+        {!isFocusMode && activeTab !== 'home' && (
+          <CourseSidebar
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+            activeCourse={activeCourse}
+            activeCourseId={activeCourseId}
+            onSelectCourse={(cId) => {
+              setActiveCourseId(cId);
+              setActiveTab('cover');
+              setSelectedUnitIndex(0);
+              setSelectedLessonIndex(0);
+            }}
+            activeTab={activeTab}
+            setActiveTab={(tab) => {
+              setActiveTab(tab);
+              if (tab !== 'units') {
+                setSelectedLessonIndex(0);
+              }
+            }}
+            selectedUnitIndex={selectedUnitIndex}
+            onSelectUnit={(idx) => {
+              setSelectedUnitIndex(idx);
+              setSelectedLessonIndex(0);
+            }}
+            completedUnitsCount={completedUnitsCount}
+            completedUnitNumbers={studentProgress.completedUnitNumbers || []}
+            progressPercentage={progressPct}
+            isTeacherMode={isTeacherMode}
+            onReturnToHome={() => {
+              setActiveTab('home');
+              setIsSidebarOpen(false);
+            }}
+            studentProfile={studentProfile}
+            isExamActive={isExamActive}
+            onOpenSearch={() => setShowSearchModal(true)}
+            onOpenProgressModal={() => setShowProgressModal(true)}
+            onOpenFavorites={() => setShowFavoritesModal(true)}
+          />
+        )}
 
         {/* Main Content Area */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <main className={isFocusMode ? "max-w-4xl mx-auto px-4 py-6 space-y-6" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5"}>
           
-          {/* Student Registration Bar (Only visible in Student Mode) */}
-          {!isTeacherMode && activeTab !== 'home' && !shouldShowLockedPreview && (
+          {/* Student Registration Bar (Only visible in Student Mode, Hidden in Focus Mode) */}
+          {!isFocusMode && !isTeacherMode && activeTab !== 'home' && !shouldShowLockedPreview && (
             <div className="no-print">
               <StudentBar 
                 activeCourseId={activeCourseId}
@@ -319,59 +387,40 @@ export default function App() {
             </div>
           )}
 
-          {/* Quick Sakinan Search Bar Trigger inside the course */}
-          {activeCourseId === 'sakinan' && activeTab !== 'home' && !shouldShowLockedPreview && (
-            <div className="no-print bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-950 rounded-2xl p-3 sm:p-4 border-2 border-amber-400/60 shadow-lg text-white flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center shrink-0">
-                  <Search className="w-5 h-5 text-amber-300" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold font-quran text-amber-200">
-                    البحث السريع في حقيبة «التقاء الساكنين»
-                  </h4>
-                  <p className="text-xs text-emerald-200/80">
-                    ابحث فوراً في جميع الشواهد القرآنية، الدروس، الكلمات المستثناة، وقواعد التخلص
-                  </p>
-                </div>
+          {/* Calm, Quiet Unit Stepper Bar when on 'units' tab (Hidden in Focus Mode) */}
+          {!isFocusMode && activeTab === 'units' && !shouldShowLockedPreview && activeCourse.units && activeCourse.units.length > 0 && (
+            <div className="no-print bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-slate-300 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 font-quran font-bold text-slate-200">
+                <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                <span>الأبواب المقررة:</span>
               </div>
 
-              <button
-                onClick={() => setShowSearchModal(true)}
-                className="w-full sm:w-auto bg-amber-400 hover:bg-amber-300 text-slate-950 px-5 py-2 rounded-xl font-bold font-quran text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                title="افتح شريط البحث الفوري"
-              >
-                <Search className="w-4 h-4 text-slate-950" />
-                <span>افتح شريط البحث الفوري 🔍</span>
-              </button>
-            </div>
-          )}
-
-          {/* Unit Selector Bar when on 'units' tab */}
-          {activeTab === 'units' && !shouldShowLockedPreview && activeCourse.units && activeCourse.units.length > 0 && (
-            <div className="no-print bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs font-bold font-quran text-slate-800">
-                <Layers className={`w-4 h-4 ${activeCourseId === 'idgham' ? 'text-purple-700' : 'text-emerald-800'}`} />
-                <span>اختر الباب التدريبي:</span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
                 {activeCourse.units.map((unit, idx) => (
                   <button
                     key={unit.id}
-                    onClick={() => setSelectedUnitIndex(idx)}
-                    className={`px-3 py-2 rounded-xl transition-all font-bold font-quran whitespace-nowrap flex items-center gap-1.5 ${
+                    onClick={() => {
+                      setSelectedUnitIndex(idx);
+                      setSelectedLessonIndex(0);
+                    }}
+                    className={`px-3 py-1 rounded-lg transition-colors font-medium cursor-pointer shrink-0 ${
                       selectedUnitIndex === idx
-                        ? activeCourseId === 'idgham'
-                          ? 'bg-indigo-950 text-amber-300 shadow-md ring-2 ring-purple-600'
-                          : 'bg-emerald-900 text-amber-300 shadow-md ring-2 ring-emerald-800'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        ? 'bg-slate-800 text-amber-300 font-bold border border-slate-700 shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                     }`}
                   >
-                    <span>الباب {unit.unitNumber}</span>
+                    الباب 0{unit.unitNumber}
                   </button>
                 ))}
               </div>
+
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="text-xs text-slate-400 hover:text-white shrink-0 hidden sm:flex items-center gap-1 cursor-pointer"
+              >
+                <span>فهرس الدروس</span>
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
@@ -437,6 +486,8 @@ export default function App() {
                       setIsExamActive(true);
                       setActiveTab('exam');
                     }}
+                    isFocusMode={isFocusMode}
+                    onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
                   />
                 ) : (
                   <div className="bg-white rounded-3xl p-10 border-2 border-dashed border-emerald-300 text-center space-y-4 font-tajawal">
@@ -832,35 +883,38 @@ export default function App() {
         </div>
       )}
 
-      {/* Footer */}
-      <footer className={`py-8 mt-12 no-print border-t transition-colors duration-300 ${
-        activeCourseId === 'idgham'
-          ? 'bg-indigo-950 text-purple-200 border-indigo-900'
-          : 'bg-emerald-950 text-emerald-200 border-emerald-900'
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-right">
-          <div>
-            <div className="font-bold font-quran text-lg text-amber-300">
-              حقيبة: {activeCourse.title}
-            </div>
-            <p className={`text-xs mt-1 font-medium ${
-              activeCourseId === 'idgham' ? 'text-purple-300/80' : 'text-emerald-300/80'
-            }`}>
-              {activeCourse.subtitle}
-            </p>
-          </div>
+      {/* Favorite Lessons Modal */}
+      <FavoriteLessonsModal
+        isOpen={showFavoritesModal}
+        onClose={() => setShowFavoritesModal(false)}
+        onNavigateToLesson={handleNavigateToLesson}
+      />
 
-          <div className="flex items-center gap-3 flex-wrap justify-center">
-            {/* WhatsApp Support Link */}
-            <WhatsAppSupport variant="button" />
+      {/* Footer - Calm, Dignified, Eye-Friendly (Hidden in Focus Mode) */}
+      {!isFocusMode && (
+        <footer className="py-8 mt-12 no-print border-t bg-slate-950 text-slate-400 border-slate-800 transition-colors duration-300">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-right text-xs">
+            <div>
+              <div className="font-bold font-quran text-base text-slate-200">
+                حقيبة: {activeCourse.title}
+              </div>
+              <p className="text-xs mt-0.5 text-slate-400">
+                {activeCourse.subtitle}
+              </p>
+            </div>
 
-            <div className="flex items-center gap-2 text-xs text-slate-950 font-bold bg-amber-400 px-4 py-2 rounded-xl font-quran shadow-sm">
-              <Award className="w-4 h-4 text-slate-950" />
-              <span>جمع وإعداد: {activeCourse.author}</span>
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              {/* WhatsApp Support Link */}
+              <WhatsAppSupport variant="button" />
+
+              <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3.5 py-1.5 rounded-lg font-quran">
+                <Award className="w-3.5 h-3.5 text-amber-400" />
+                <span>إعداد: {activeCourse.author}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

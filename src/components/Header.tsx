@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Course, GroupThemeConfig } from '../types';
 import { getAllCourses } from '../data/courses';
 import { isCourseUnlocked } from '../utils/studentProgressStorage';
 import { 
-  BookOpen, GraduationCap, Table, HelpCircle, Bookmark, Printer, Book, 
-  ShieldAlert, Award, Layers, UserCheck, Lock, Users, ShieldCheck, Moon, 
-  Sun, Trophy, Grid, ChevronDown, Briefcase, PlusCircle, Type, BookMarked,
-  Search, Share2, LogOut, User
+  Menu, X, BookOpen, Trophy, Moon, Sun, Search, Share2, 
+  LogOut, Settings, Briefcase, Type, Award, ChevronDown, 
+  Grid, ShieldCheck, Lock, Users
 } from 'lucide-react';
 import { WhatsAppSupport } from './WhatsAppSupport';
-import { getActiveThemeForStudent, subscribeGroupThemes, getEffectiveThemeStyle } from '../utils/groupThemeStorage';
+import { getActiveThemeForStudent, subscribeGroupThemes } from '../utils/groupThemeStorage';
 import { getStudentProfile, subscribeStudentProfile } from '../utils/studentStorage';
 import { InstituteLogo } from './InstituteLogo';
 
@@ -36,6 +35,9 @@ interface HeaderProps {
   onOpenProgressModal: () => void;
   progressPercentage: number;
   completedUnitsCount?: number;
+  onToggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
+  currentSectionTitle?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -61,8 +63,16 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenProgressModal,
   progressPercentage,
   completedUnitsCount = 0,
+  onToggleSidebar,
+  isSidebarOpen = false,
+  currentSectionTitle,
 }) => {
-  const [showCourseDropdown, setShowCourseDropdown] = React.useState(false);
+  const [showCourseDropdown, setShowCourseDropdown] = useState(false);
+  const [showToolsDropdown, setShowToolsDropdown] = useState(false);
+
+  const courseDropdownRef = useRef<HTMLDivElement>(null);
+  const toolsDropdownRef = useRef<HTMLDivElement>(null);
+
   const [activeTheme, setActiveTheme] = useState<GroupThemeConfig | null>(() => {
     return getActiveThemeForStudent(getStudentProfile()?.group);
   });
@@ -80,462 +90,324 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
-  const navItems = [
-    { id: 'cover', label: 'غلاف الحقيبة', icon: Book, count: 'غلاف رسمي' },
-    { id: 'units', label: 'الكتاب التدريبي (الأبواب الخمسة)', icon: BookOpen, count: `${activeCourse.units.length} أبواب` },
-    { id: 'exceptions', label: 'الكلمات المستثناة', icon: BookMarked, count: 'حفص والقراء' },
-    { id: 'examples', label: 'المختبر القرآني للأمثلة', icon: GraduationCap, count: `${activeCourse.quranExamples.length}+ مثالاً` },
-    { id: 'errors', label: 'أخطاء القراء والتصحيح', icon: ShieldAlert, count: 'ميداني' },
-    { id: 'summary', label: 'جدول المقارنة الشامل', icon: Table, count: 'جميع الطرق' },
-    { id: 'exam', label: 'الاختبار النهائي الشامل', icon: Award, count: 'اختبار' },
-    { id: 'rules', label: 'دليل الأحكام السريع (CheatSheet)', icon: Bookmark, count: 'بحث وتصفية' },
-    { id: 'books', label: 'المراجع والمصادر العلمية', icon: Book, count: 'أمهات الكتب' },
-  ];
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (courseDropdownRef.current && !courseDropdownRef.current.contains(target)) {
+        setShowCourseDropdown(false);
+      }
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(target)) {
+        setShowToolsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const isIdgham = activeCourse.id === 'idgham';
+  // Human-readable tab titles
+  const getTabLabel = (tabId: string) => {
+    switch (tabId) {
+      case 'cover': return 'غلاف الحقيبة والتقديم';
+      case 'units': return 'الكتاب التدريبي والدروس';
+      case 'examples': return 'المختبر القرآني للأمثلة';
+      case 'exceptions': return 'الكلمات المستثناة';
+      case 'errors': return 'أخطاء القراء والتصحيح';
+      case 'summary': return 'جدول المقارنة الشامل';
+      case 'exam': return 'الاختبار النهائي الشامل';
+      case 'rules': return 'دليل الأحكام السريع';
+      case 'books': return 'المراجع والمصادر';
+      default: return 'المحتوى الدراسي';
+    }
+  };
+
+  const isHome = activeTab === 'home';
 
   return (
-    <header className={`${isIdgham ? 'bg-indigo-950 border-b border-indigo-900/90' : 'bg-emerald-950 border-b border-emerald-800'} text-white shadow-xl sticky top-0 z-40 no-print transition-colors duration-300`}>
-      {/* Top Banner Accent */}
-      <div className={isIdgham ? 'bg-gradient-to-r from-amber-400 via-purple-500 to-indigo-500 h-1.5 w-full' : 'bg-gradient-to-r from-amber-500 via-emerald-500 to-amber-500 h-1.5 w-full'}></div>
+    <header className="bg-slate-950/95 border-b border-slate-800 text-slate-100 shadow-xs sticky top-0 z-30 no-print transition-colors duration-200 backdrop-blur-md">
+      {/* Subtle top hairline */}
+      <div className="h-0.5 w-full bg-emerald-600/30" />
 
-      {/* Mode Switcher Banner */}
-      <div className={`${isIdgham ? 'bg-slate-950 border-b border-indigo-900/80' : 'bg-slate-900 border-b border-emerald-800/80'} px-4 py-2 text-xs font-tajawal transition-colors duration-300`}>
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
           
-          {/* Active Mode Identifier & Home Switcher */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Right (RTL start): Sidebar Toggle & Course Identity */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            
+            {/* Collapsible Sidebar Toggle Button */}
+            {!isHome && onToggleSidebar && (
+              <button
+                onClick={onToggleSidebar}
+                className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-semibold font-tajawal transition-colors flex items-center gap-1.5 cursor-pointer border ${
+                  isSidebarOpen 
+                    ? 'bg-slate-800 text-amber-300 border-slate-700' 
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-800 hover:border-slate-700'
+                }`}
+                title={isSidebarOpen ? 'إخفاء الفهرس الجانبي' : 'فتح فهرس الحقيبة والدروس'}
+                aria-label="تبديل القائمة الجانبية"
+              >
+                {isSidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4 text-emerald-400" />}
+                <span className="hidden md:inline">الفهرس والدروس</span>
+              </button>
+            )}
+
+            {/* Platform Home Button */}
             <button
               onClick={onReturnToHome}
-              className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black px-3 py-1 rounded-full text-xs font-quran transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-              title="العودة لشاشة الرئيسية واختيار الحقائب"
+              className="text-slate-400 hover:text-white hover:bg-slate-900 p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer font-tajawal"
+              title="العودة لشاشة الحقائب الرئيسية"
             >
-              <Grid className="w-3.5 h-3.5 text-slate-950" />
-              <span>المنصة الرئيسية للدورات</span>
+              <Grid className="w-4 h-4 text-slate-400" />
+              <span className="hidden sm:inline font-bold">المنصة</span>
             </button>
 
-            {isTeacherMode ? (
-              <div className="flex items-center gap-2 bg-amber-400/20 text-amber-300 border border-amber-400/40 px-3 py-1 rounded-full font-bold font-quran text-xs">
-                <UserCheck className="w-4 h-4 text-amber-300" />
-                <span>واجهة المعلم والمدرب مفعّلة</span>
-              </div>
-            ) : (
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full border font-bold font-quran text-xs ${
-                isIdgham
-                  ? 'bg-purple-900/80 text-purple-100 border-purple-700'
-                  : 'bg-emerald-900/90 text-emerald-100 border-emerald-700'
-              }`}>
-                <Users className="w-4 h-4 text-amber-300" />
-                <span>واجهة الطالب التفاعلية</span>
-              </div>
-            )}
+            <span className="hidden sm:inline text-slate-700" aria-hidden="true">|</span>
 
-            {/* Customized Institute / Group Theme Pill */}
-            {activeTheme && (
-              <div 
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold font-quran shadow-sm bg-black/40 border-amber-400/60 text-amber-200"
-                title={`الواجهة مخصصة لمعهد: ${activeTheme.instituteName} - دفعة: ${activeTheme.groupName}`}
-              >
-                <InstituteLogo theme={activeTheme} className="w-4 h-4" iconClassName="w-3.5 h-3.5 text-amber-300" />
-                <span className="max-w-[140px] truncate">{activeTheme.instituteName}</span>
-                <span className="text-[10px] bg-amber-400/20 px-1.5 py-0.2 rounded text-amber-300">
-                  {activeTheme.groupName}
-                </span>
+            {/* Course Title & Switcher */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative" ref={courseDropdownRef}>
+                <button
+                  onClick={() => setShowCourseDropdown(!showCourseDropdown)}
+                  className="text-right hover:bg-slate-900 p-1 sm:px-2 py-1 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="التبديل بين الحقائب"
+                >
+                  <div className="max-w-[140px] sm:max-w-[220px] md:max-w-xs truncate">
+                    <span className="text-xs sm:text-sm font-bold font-quran text-slate-100 truncate block">
+                      {isHome ? 'الحقائب التجويدية المقررة' : (activeCourse.shortTitle || activeCourse.title)}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3 h-3 text-slate-500 shrink-0" />
+                </button>
+
+                {showCourseDropdown && (
+                  <div className="absolute top-full right-0 mt-1.5 w-64 sm:w-72 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-1.5 z-50 text-right space-y-0.5 animate-fadeIn">
+                    <div className="text-[11px] font-bold text-slate-400 px-2 py-1 border-b border-slate-800">
+                      الحقائب التجويدية المقررة
+                    </div>
+                    <div className="max-h-56 overflow-y-auto space-y-0.5 py-1">
+                      {getAllCourses().map((c) => {
+                        const unlocked = isCourseUnlocked(c.id, isTeacherMode, c);
+                        const isSelected = c.id === activeCourse.id;
+                        return (
+                          <button
+                            key={c.id}
+                            onClick={() => {
+                              onSelectCourse(c.id);
+                              setShowCourseDropdown(false);
+                            }}
+                            className={`w-full text-right px-2.5 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-400/10 text-amber-300 font-bold'
+                                : 'text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <span className="truncate flex items-center gap-1.5">
+                              {!unlocked && !isTeacherMode && <Lock className="w-3 h-3 text-slate-500 shrink-0" />}
+                              <span className="truncate">{c.shortTitle || c.title}</span>
+                            </span>
+                            {isSelected && <span className="text-[10px] text-amber-400">الحالية</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+
           </div>
 
-          {/* Switch Portal & Theme Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* WhatsApp Support Button */}
-            <WhatsAppSupport variant="button" />
+          {/* Center: Quiet Breadcrumb Section Title */}
+          {!isHome && (
+            <div className="hidden md:flex items-center gap-2 text-xs text-slate-400 font-tajawal">
+              <span className="text-slate-600">/</span>
+              <span className="text-amber-300/90 font-medium">
+                {currentSectionTitle || getTabLabel(activeTab)}
+              </span>
+            </div>
+          )}
 
-            {/* Academic Progress Button */}
+          {/* Left (RTL end): Progress, Night Mode & Tools */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            
+            {/* Academic Progress */}
             <button
               onClick={onOpenProgressModal}
-              className={`text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-quran border ${
-                isIdgham
-                  ? 'bg-purple-900/80 hover:bg-purple-800 text-amber-300 border-purple-700'
-                  : 'bg-emerald-900/90 hover:bg-emerald-800 text-amber-300 border-emerald-700'
-              }`}
+              className="text-slate-300 hover:text-white hover:bg-slate-900 px-2 sm:px-2.5 py-1 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
               title="عرض سجل وإنجاز التقدم الدراسي"
             >
               <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span>التقدم الدراسي ({progressPercentage}%)</span>
+              <span className="font-mono text-amber-300 font-bold">{progressPercentage}%</span>
             </button>
 
-            {/* Search Sakinan Course Button */}
+            {/* Quick Search */}
             {onOpenSearch && (
               <button
                 onClick={onOpenSearch}
-                className={`text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-quran border ${
-                  isIdgham
-                    ? 'bg-purple-900/80 hover:bg-purple-800 text-amber-200 border-purple-700'
-                    : 'bg-emerald-900/90 hover:bg-emerald-800 text-amber-300 border-emerald-700'
-                }`}
-                title="البحث السريع في شواهد ودروس وأمثلة حقيبة التقاء الساكنين"
+                className="text-slate-400 hover:text-white hover:bg-slate-900 p-1.5 sm:p-2 rounded-xl transition-colors cursor-pointer"
+                title="البحث الفوري في المحتوى (Ctrl+K)"
+                aria-label="بحث"
               >
-                <Search className="w-3.5 h-3.5 text-amber-400" />
-                <span>بحث الحقيبة 🔍</span>
+                <Search className="w-4 h-4" />
               </button>
             )}
 
-            {/* Share Achievement Button */}
-            {onOpenShareModal && (
-              <button
-                onClick={onOpenShareModal}
-                className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-quran shadow-sm"
-                title="مشاركة إنجازك وتقدمك الدراسي على وسائل التواصل الاجتماعي"
-              >
-                <Share2 className="w-3.5 h-3.5 text-slate-950 fill-current" />
-                <span>مشاركة</span>
-              </button>
-            )}
-
-            {/* Student Logout Button */}
-            {studentName && onLogoutStudent && !isTeacherMode && (
-              <button
-                onClick={onLogoutStudent}
-                className="bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-500/50 text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer font-quran"
-                title="تسجيل الخروج من الحساب"
-              >
-                <LogOut className="w-3.5 h-3.5 text-red-400" />
-                <span>خروج</span>
-              </button>
-            )}
-
-            {/* Quran Font Customizer Button */}
-            {onOpenFontModal && (
-              <button
-                onClick={onOpenFontModal}
-                className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-quran"
-                title="تخصيص وتبديل نوع خط المصحف الشريف"
-              >
-                <Type className="w-3.5 h-3.5 text-amber-400" />
-                <span>خط المصحف</span>
-              </button>
-            )}
-
-            {/* Night / Dark Reading Mode Toggle */}
+            {/* Night / Light Mode Toggle */}
             <button
               onClick={() => setIsNightMode(!isNightMode)}
-              className={`text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-quran border ${
-                isNightMode
-                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-sm'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-              }`}
-              title={isNightMode ? 'التحويل للوضع النهاري' : 'التحويل لوضع القراءة الليلي مريح العينين'}
+              className="text-slate-400 hover:text-white hover:bg-slate-900 p-1.5 sm:p-2 rounded-xl transition-colors cursor-pointer"
+              title={isNightMode ? 'التحويل للوضع النهاري' : 'التحويل للوضع الليلي'}
+              aria-label="تبديل الإضاءة"
             >
-              {isNightMode ? (
-                <>
-                  <Sun className="w-3.5 h-3.5 text-slate-950 fill-slate-950" />
-                  <span>النهار</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-3.5 h-3.5 text-amber-300" />
-                  <span>الليل</span>
-                </>
-              )}
+              {isNightMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-400" />}
             </button>
 
-            {isTeacherMode ? (
-              <>
-                <button
-                  onClick={onOpenTeacherDashboard}
-                  className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold px-3 py-1 rounded-xl font-quran shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>لوحة المعلم</span>
-                </button>
-
-                <button
-                  onClick={onOpenBagManagement}
-                  className="bg-emerald-700 hover:bg-emerald-600 text-amber-200 border border-emerald-500/50 text-xs font-bold px-3 py-1 rounded-xl font-quran shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                  title="إدارة الحقائب والدروس وضبط الحالات والأسعار"
-                >
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>🗂️ إدارة الحقائب</span>
-                </button>
-
-                <button
-                  onClick={onOpenCertificateEditor}
-                  className="bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/50 text-xs font-bold px-3 py-1 rounded-xl font-quran shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                  title="تعديل وتصميم قالَب شهادة الاجتياز"
-                >
-                  <Award className="w-3.5 h-3.5 text-amber-400" />
-                  <span>🎓 تعديل الشهادات</span>
-                </button>
-
-                <button
-                  onClick={() => setIsTeacherMode(false)}
-                  className={`text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer border ${
-                    isIdgham
-                      ? 'bg-purple-800 hover:bg-purple-700 text-white border-purple-600'
-                      : 'bg-emerald-800 hover:bg-emerald-700 text-white border-emerald-600'
-                  }`}
-                  title="التحويل فوراً لواجهة الطالب النقية"
-                >
-                  <Lock className="w-3.5 h-3.5 text-amber-300" />
-                  <span>واجهة الطالب</span>
-                </button>
-              </>
-            ) : (
+            {/* Teacher Fast Badge */}
+            {isTeacherMode && (
               <button
-                onClick={onUnlockTeacherModal}
-                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer font-quran"
-                title="الدخول لبوابة المعلم والمدرب بالرمز السري"
+                onClick={onOpenTeacherDashboard}
+                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-2.5 py-1 rounded-lg text-xs transition-colors flex items-center gap-1 cursor-pointer hidden sm:flex"
               >
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                <span>المعلم</span>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>لوحة المعلم</span>
               </button>
             )}
-          </div>
 
-        </div>
-      </div>
+            {/* Unified Settings / Tools Menu */}
+            <div className="relative" ref={toolsDropdownRef}>
+              <button
+                onClick={() => setShowToolsDropdown(!showToolsDropdown)}
+                className={`p-1.5 sm:p-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1 text-xs ${
+                  showToolsDropdown ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                }`}
+                title="الأدوات والإعدادات"
+                aria-label="قائمة الأدوات والإعدادات"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          
-          {/* Logo & Title Header */}
-          <div className="flex items-start gap-4">
-            <div className={`p-3 rounded-2xl shadow-inner shrink-0 ${
-              isIdgham
-                ? 'bg-purple-900/90 border border-purple-600/60 text-amber-300'
-                : 'bg-emerald-900/90 border border-emerald-700/60 text-amber-400'
-            }`}>
-              <BookOpen className="w-8 h-8" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border font-quran ${
-                  isIdgham
-                    ? 'bg-purple-500/20 text-purple-200 border-purple-400/40'
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                }`}>
-                  {activeCourse.badge}
-                </span>
-                <span className="bg-amber-400 text-slate-950 text-xs font-bold px-2.5 py-0.5 rounded-full font-quran shadow-sm">
-                  جمع وإعداد: {activeCourse.author}
-                </span>
+              {showToolsDropdown && (
+                <div className="absolute top-full left-0 mt-1.5 w-60 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-1.5 z-50 text-right space-y-1 animate-fadeIn">
+                  
+                  {onOpenSearch && (
+                    <button
+                      onClick={() => {
+                        setShowToolsDropdown(false);
+                        onOpenSearch();
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition-colors flex items-center justify-between cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Search className="w-3.5 h-3.5 text-amber-400" />
+                        <span>البحث في المحتوى والشواهد</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">Ctrl+K</span>
+                    </button>
+                  )}
 
-                {/* Course Quick Selector Dropdown */}
-                <div className="relative inline-block text-right">
-                  <button
-                    onClick={() => setShowCourseDropdown(!showCourseDropdown)}
-                    className={`text-xs font-bold px-3 py-0.5 rounded-full transition-all flex items-center gap-1 cursor-pointer font-quran border ${
-                      isIdgham
-                        ? 'bg-purple-900 hover:bg-purple-800 text-amber-300 border-purple-400/40'
-                        : 'bg-emerald-900 hover:bg-emerald-800 text-amber-300 border-amber-400/40'
-                    }`}
-                  >
-                    <span>تبديل الحقيبة</span>
-                    <ChevronDown className="w-3 h-3" />
-                  </button>
+                  {onOpenFontModal && (
+                    <button
+                      onClick={() => {
+                        setShowToolsDropdown(false);
+                        onOpenFontModal();
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <Type className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>تخصيص خط المصحف الشريف</span>
+                    </button>
+                  )}
 
-                  {showCourseDropdown && (
-                    <div className="absolute top-full right-0 mt-2 w-72 bg-slate-900 border-2 border-amber-400 rounded-2xl shadow-2xl p-2.5 z-50 text-right space-y-1 animate-fadeIn">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 px-2 py-1 font-quran border-b border-slate-800">
-                        <span>الحقائب التدريبية المتوفرة:</span>
-                        <span className="text-amber-400 text-[10px] font-sans">({getAllCourses().length})</span>
-                      </div>
-                      
-                      <div className="max-h-60 overflow-y-auto space-y-1 py-1">
-                        {getAllCourses().map((c) => {
-                          const unlocked = isCourseUnlocked(c.id, isTeacherMode, c);
-                          const isComingSoon = c.status === 'coming_soon';
-                          const isLocked = c.status === 'locked' || (!unlocked && !isTeacherMode);
-                          const isPaid = c.pricing?.isPaid ?? false;
+                  {onOpenShareModal && (
+                    <button
+                      onClick={() => {
+                        setShowToolsDropdown(false);
+                        onOpenShareModal();
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-sky-400" />
+                      <span>مشاركة إنجازك الدراسي</span>
+                    </button>
+                  )}
 
-                          return (
-                            <button
-                              key={c.id}
-                              onClick={() => {
-                                onSelectCourse(c.id);
-                                setShowCourseDropdown(false);
-                              }}
-                              className={`w-full text-right px-3 py-2 rounded-xl text-xs font-bold font-quran transition-all flex items-center justify-between cursor-pointer ${
-                                c.id === activeCourse.id
-                                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-sm'
-                                  : isComingSoon
-                                    ? 'text-slate-300 hover:bg-purple-950/60'
-                                    : !unlocked
-                                      ? 'text-slate-400 hover:bg-slate-800'
-                                      : 'text-slate-200 hover:bg-emerald-900 hover:text-amber-300'
-                              }`}
-                            >
-                              <span className="flex items-center gap-1.5 truncate">
-                                {isComingSoon ? (
-                                  <Lock className="w-3 h-3 text-purple-400 shrink-0" />
-                                ) : !unlocked ? (
-                                  <Lock className="w-3 h-3 text-amber-400 shrink-0" />
-                                ) : null}
-                                <span className="truncate">{c.shortTitle || c.title}</span>
-                              </span>
+                  <div className="px-3 py-1 border-t border-slate-800/80">
+                    <WhatsAppSupport variant="link" />
+                  </div>
 
-                              <div className="flex items-center gap-1 shrink-0">
-                                {c.id === activeCourse.id ? (
-                                  <span className="text-[10px] bg-slate-950 text-amber-300 px-1.5 py-0.5 rounded">الحالية</span>
-                                ) : isComingSoon ? (
-                                  <span className="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded">قريباً</span>
-                                ) : isPaid ? (
-                                  <span className="text-[9px] bg-amber-900/60 text-amber-300 px-1.5 py-0.5 rounded">مدفوعة 🔒</span>
-                                ) : !unlocked ? (
-                                  <span className="text-[9px] bg-amber-950 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded">مغلقة</span>
-                                ) : (
-                                  <span className="text-[9px] bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded">مفتوحة</span>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Manage Bags Quick Trigger */}
+                  {isTeacherMode ? (
+                    <>
                       {onOpenBagManagement && (
-                        <div className="pt-2 border-t border-slate-800">
-                          <button
-                            onClick={() => {
-                              setShowCourseDropdown(false);
-                              onOpenBagManagement();
-                            }}
-                            className="w-full bg-emerald-800/90 hover:bg-emerald-700 text-amber-200 font-bold text-xs p-2 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer font-quran transition-colors shadow-sm"
-                          >
-                            <Briefcase className="w-3.5 h-3.5" />
-                            <span>إدارة الحقائب والدروس والأسعار ⚙️</span>
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => {
+                            setShowToolsDropdown(false);
+                            onOpenBagManagement();
+                          }}
+                          className="w-full text-right px-3 py-2 rounded-lg text-xs text-amber-300 hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800"
+                        >
+                          <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+                          <span>إدارة الحقائب والدروس والأسعار</span>
+                        </button>
                       )}
-                    </div>
+
+                      {onOpenCertificateEditor && (
+                        <button
+                          onClick={() => {
+                            setShowToolsDropdown(false);
+                            onOpenCertificateEditor();
+                          }}
+                          className="w-full text-right px-3 py-2 rounded-lg text-xs text-amber-300 hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                          <Award className="w-3.5 h-3.5 text-amber-400" />
+                          <span>تعديل قالب الشهادات</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          setShowToolsDropdown(false);
+                          setIsTeacherMode(false);
+                        }}
+                        className="w-full text-right px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>التبديل لواجهة الطالب</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setShowToolsDropdown(false);
+                        onUnlockTeacherModal();
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-lg text-xs text-amber-300/90 hover:text-amber-200 hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>الدخول كمعلم أو مدرب</span>
+                    </button>
                   )}
+
+                  {studentName && onLogoutStudent && !isTeacherMode && (
+                    <button
+                      onClick={() => {
+                        setShowToolsDropdown(false);
+                        onLogoutStudent();
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-lg text-xs text-rose-400 hover:bg-rose-950/40 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>تسجيل الخروج ({studentName})</span>
+                    </button>
+                  )}
+
                 </div>
-
-                {/* Sakinan Quick Search Trigger */}
-                {onOpenSearch && (
-                  <button
-                    onClick={onOpenSearch}
-                    className={`text-xs font-bold px-3 py-0.5 rounded-full transition-all flex items-center gap-1.5 cursor-pointer font-quran border ${
-                      isIdgham
-                        ? 'bg-purple-900 hover:bg-purple-800 text-amber-200 border-purple-500/40'
-                        : 'bg-emerald-900 hover:bg-emerald-800 text-amber-300 border-emerald-600/60'
-                    }`}
-                    title="بحث فوري في شواهد وأمثلة ودروس حقيبة التقاء الساكنين"
-                  >
-                    <Search className="w-3 h-3 text-amber-400" />
-                    <span>بحث في المحتوى 🔍</span>
-                  </button>
-                )}
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl font-extrabold font-quran text-amber-100 tracking-wide mt-1">
-                {activeCourse.title}
-              </h1>
-              <p className={`text-xs sm:text-sm mt-0.5 font-tajawal font-medium ${isIdgham ? 'text-purple-200/90' : 'text-emerald-200/80'}`}>
-                {activeCourse.subtitle}
-              </p>
+              )}
             </div>
+
           </div>
 
         </div>
-
-        {/* Navigation Tabs or Locked Course Notice */}
-        {!isTeacherMode && !isCourseUnlocked(activeCourse.id, isTeacherMode, activeCourse) ? (
-          <div className={`mt-5 pt-3.5 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-quran ${
-            isIdgham ? 'border-indigo-900/90 text-purple-200' : 'border-emerald-900/80 text-amber-200'
-          }`}>
-            <div className="flex items-center gap-2">
-              <span className="p-1 rounded-lg bg-amber-400/20 text-amber-300 border border-amber-400/40">
-                <Lock className="w-3.5 h-3.5" />
-              </span>
-              <span className="font-bold">
-                {activeCourse.status === 'coming_soon'
-                  ? 'هذه الحقيبة قيد الإعداد والإطلاق قريباً - يمكنك حجز مقعدك والانضمام لقائمة الانتظار'
-                  : activeCourse.pricing?.isPaid
-                    ? 'هذه الحقيبة مدفوعة ومقفلة - تفتح للدارس فور موافقة المعلم أو اعتماد الوصول'
-                    : 'هذه الحقيبة مغلقة حالياً - يلزم إتمام ودراسة الحقيبة السابقة واجتياز اختبارها بنجاح'}
-              </span>
-            </div>
-
-            <button
-              onClick={onReturnToHome}
-              className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-4 py-2 rounded-xl font-bold font-quran transition-all flex items-center gap-1.5 cursor-pointer shadow-sm text-xs shrink-0"
-            >
-              <span>العودة لشاشة الحقائب المتاحة</span>
-              <ChevronDown className="w-3.5 h-3.5 rotate-90" />
-            </button>
-          </div>
-        ) : (
-          <nav className={`mt-5 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-4 border-t ${
-            isIdgham ? 'border-indigo-900/90' : 'border-emerald-900/80'
-          }`}>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              const isExamActiveLock = isExamActive && item.id !== 'exam';
-              const isUnitsIncompleteLock = item.id === 'exam' && !isTeacherMode && completedUnitsCount < activeCourse.units.length;
-
-              const badgeCount = (item.id === 'exam' && isUnitsIncompleteLock)
-                ? `${completedUnitsCount}/${activeCourse.units.length} أبواب`
-                : item.count;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (isExamActiveLock) return;
-                    setActiveTab(item.id);
-                  }}
-                  disabled={isExamActiveLock}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
-                    isExamActiveLock
-                      ? isIdgham
-                        ? 'opacity-40 bg-indigo-950/40 text-purple-400 cursor-not-allowed border border-indigo-900'
-                        : 'opacity-40 bg-emerald-950/40 text-emerald-400 cursor-not-allowed border border-emerald-900'
-                      : isUnitsIncompleteLock
-                      ? isActive
-                        ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md border border-amber-400 cursor-pointer'
-                        : 'bg-amber-950/40 text-amber-200 border border-amber-500/40 hover:bg-amber-900/60 cursor-pointer'
-                      : isActive
-                      ? 'bg-amber-400 text-slate-950 shadow-lg font-extrabold scale-[1.02] cursor-pointer'
-                      : isIdgham
-                      ? 'bg-purple-950/60 text-purple-200 hover:bg-purple-900/80 hover:text-white border border-purple-800/50 cursor-pointer'
-                      : 'bg-emerald-900/50 text-emerald-200 hover:bg-emerald-800/80 hover:text-white border border-emerald-800/50 cursor-pointer'
-                  }`}
-                  title={
-                    isExamActiveLock
-                      ? 'الأيقونات مقفولة أثناء أداء الاختبار النهائي الشامل'
-                      : isUnitsIncompleteLock
-                      ? `الاختبار الشامل مقفل حتى إتمام دراسة جميع الأبواب (${completedUnitsCount}/${activeCourse.units.length})`
-                      : undefined
-                  }
-                >
-                  {isExamActiveLock || isUnitsIncompleteLock ? (
-                    <Lock className={`w-3.5 h-3.5 shrink-0 ${isUnitsIncompleteLock ? 'text-amber-400' : 'text-amber-400/90'}`} />
-                  ) : (
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
-                  )}
-                  <span>{item.label}</span>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-sans ${
-                      isActive
-                        ? 'bg-slate-950/20 text-slate-950 font-bold'
-                        : isUnitsIncompleteLock
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
-                        : isIdgham
-                        ? 'bg-indigo-950 text-purple-300'
-                        : 'bg-emerald-950 text-emerald-300'
-                    }`}
-                  >
-                    {badgeCount}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        )}
       </div>
     </header>
   );
 };
-

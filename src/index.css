@@ -1,7 +1,80 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --quran-font-family: 'Amiri', 'Amiri Quran', 'Scheherazade New', serif;
+  --bg-daylight-paper: #F8F5EC;
+  --card-daylight-paper: #FFFDF8;
+  --card-alt-daylight: #F4EFE2;
+  --border-daylight-paper: #E6DFC8;
+  --text-daylight-primary: #292524;
+}
+
+/* Warm Manuscript Daylight Mode (العرض النهاري المريح للعين بنمط ورق المصاحف الفاخر) */
+html:not(.dark) {
+  background-color: #F8F5EC;
+  color: #292524;
+}
+
+html:not(.dark) body {
+  background-color: #F8F5EC;
+  color: #292524;
+}
+
+/* Smooth warm paper scrollbars in light mode */
+html:not(.dark) ::-webkit-scrollbar-track {
+  background: #EFE8D8;
+}
+
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #D2C6AC;
+  border-radius: 4px;
+}
+
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: #B6A789;
+}
+
+/* Ensure common white containers have soft warm manuscript ivory tone instead of blinding clinical white */
+html:not(.dark) .bg-white {
+  background-color: #FFFDF8 !important;
+}
+
+html:not(.dark) .bg-slate-50 {
+  background-color: #F4EFE2 !important;
+}
+
+html:not(.dark) .border-slate-200 {
+  border-color: #E6DFC8 !important;
+}
+
+html:not(.dark) .border-slate-100 {
+  border-color: #EFE8D6 !important;
+}
+
+html:not(.dark) .border-slate-300 {
+  border-color: #D7CCB2 !important;
+}
+
+html:not(.dark) .text-slate-900 {
+  color: #1C1917 !important;
+}
+
+html:not(.dark) .text-slate-800 {
+  color: #282420 !important;
+}
+
+html:not(.dark) .text-slate-700 {
+  color: #38322c !important;
+}
+
+html:not(.dark) .text-slate-600 {
+  color: #574e44 !important;
+}
+
+html:not(.dark) .text-slate-500 {
+  color: #796e62 !important;
 }
 
 @layer utilities {
@@ -100,10 +173,19 @@
   box-shadow: 0 10px 30px rgba(217, 119, 6, 0.15);
 }
 
-/* Night Mode (Dark Mode) Enhancements */
+/* Night Mode (Dark Mode) Enhancements - Calming, High-Contrast & Respectful to Quranic Content */
 .dark {
   color-scheme: dark;
-  background-color: #090d16;
+  background-color: #0b0f19;
+  color: #f1f5f9;
+}
+
+body {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.dark body {
+  background-color: #0b0f19;
   color: #f1f5f9;
 }
 
@@ -113,53 +195,22 @@
 
 .dark ::-webkit-scrollbar-thumb {
   background: #334155;
+  border-radius: 4px;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
 
-.dark .bg-white {
-  background-color: #111827 !important;
-  color: #f8fafc !important;
-  border-color: #1f2937 !important;
-}
-
-.dark .bg-slate-50 {
-  background-color: #1f2937 !important;
-  color: #f3f4f6 !important;
-  border-color: #374151 !important;
-}
-
-.dark .bg-slate-100 {
-  background-color: #374151 !important;
-  color: #f9fafb !important;
-}
-
-.dark .text-slate-800,
-.dark .text-slate-900,
-.dark .text-slate-700 {
-  color: #f3f4f6 !important;
-}
-
-.dark .text-slate-600,
-.dark .text-slate-500 {
-  color: #d1d5db !important;
-}
-
-.dark .border-slate-200,
-.dark .border-slate-300 {
-  border-color: #374151 !important;
-}
-
-.dark .bg-amber-50 {
-  background-color: #1e1b4b !important;
-  color: #fef08a !important;
-  border-color: #3730a3 !important;
+/* Subtle dark mode elevation helpers where explicit Tailwind classes might be missing */
+.dark .shadow-xs,
+.dark .shadow-sm,
+.dark .shadow-md {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
 }
 
 .dark .font-quran {
-  font-family: 'Amiri', 'Scheherazade New', serif;
+  font-family: var(--quran-font-family, 'Amiri', 'Scheherazade New', serif);
   line-height: 1.95;
 }
 

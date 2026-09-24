@@ -22,11 +22,11 @@ export const CoverView: React.FC<CoverViewProps> = ({
   setIsTeacherMode,
   onPrint,
 }) => {
-  const title = course ? course.title : 'التقاء الساكنين في التجويد';
-  const subtitle = course ? course.subtitle : 'منهج تعليمي تطبيقي متدرج لمعلمي القرآن الكريم والقراءات';
+  const title = course ? course.title : 'أصول التلاوة والتأسيس التجويدي';
+  const subtitle = course ? course.subtitle : 'الحقيبة التأسيسية الشاملة في أصول التلاوة وأحكام التجويد الكبرى';
   const author = course ? course.author : 'أحمد إبراهيم';
-  const unitsCount = course ? course.units.length : 5;
-  const defaultBadge = course ? course.badge : 'الكتاب التدريبي المنهاجي المتكامل';
+  const unitsCount = course ? course.units.length : 4;
+  const defaultBadge = course ? course.badge : 'الحقيبة التأسيسية الشاملة';
 
   const [studentProfile, setStudentProfile] = useState(() => getStudentProfile());
   const [activeTheme, setActiveTheme] = useState<GroupThemeConfig | null>(() => {
@@ -51,7 +51,7 @@ export const CoverView: React.FC<CoverViewProps> = ({
   }, []);
 
   const isIdgham = course?.id === 'idgham';
-  const lockDetails = getCourseLockDetails(course?.id || 'sakinan', isTeacherMode, course);
+  const lockDetails = getCourseLockDetails(course?.id || 'foundational_rules', isTeacherMode, course);
   const isUnlocked = lockDetails.isUnlocked;
 
   // Compute theme styling

@@ -45,7 +45,8 @@ export const saveStudentProfile = async (
   trainerName?: string,
   referralCode?: string,
   group?: string,
-  instituteName?: string
+  instituteName?: string,
+  enrolledCourseId?: string
 ): Promise<StudentProfile> => {
   const cleanName = name.trim() || 'طالب جديد';
   const existing = getStudentProfile();
@@ -64,6 +65,7 @@ export const saveStudentProfile = async (
     ...(referralCode ? { referralCode } : (existing?.referralCode ? { referralCode: existing.referralCode } : {})),
     ...(group ? { group } : (existing?.group ? { group: existing.group } : {})),
     ...(instituteName ? { instituteName } : (existing?.instituteName ? { instituteName: existing.instituteName } : {})),
+    ...(enrolledCourseId ? { enrolledCourseId } : (existing?.enrolledCourseId ? { enrolledCourseId: existing.enrolledCourseId } : {})),
   };
 
   if (typeof window !== 'undefined') {
@@ -78,11 +80,25 @@ export const saveStudentProfile = async (
       ...profile,
       updatedAt: Date.now(),
     }, { merge: true });
-  } catch (err) {
-    console.warn('Firestore profile save failed:', err);
+  } catch (e) {
+    console.warn('Could not sync student to firestore:', e);
   }
 
   return profile;
+};
+
+export const updateStudentEnrolledCourse = async (courseId: string): Promise<StudentProfile | null> => {
+  const existing = getStudentProfile();
+  if (!existing || !existing.name) return null;
+  return saveStudentProfile(
+    existing.name,
+    existing.trainerId,
+    existing.trainerName,
+    existing.referralCode,
+    existing.group,
+    existing.instituteName,
+    courseId
+  );
 };
 
 export const subscribeStudentSubmissions = (

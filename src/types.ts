@@ -285,6 +285,7 @@ export interface StudentProfile {
   referralCode?: string;
   group?: string; // الحلقة أو المجموعة الطلابية (مثال: 'حلقة الإتقان المسائية')
   instituteName?: string; // المعهد أو المقرأة التابع لها
+  enrolledCourseId?: string; // الحقيبة المقررة أو المشترك بها الطالب حالياً
 }
 
 export type ThemePreset = 'emerald' | 'royal_purple' | 'amber_gold' | 'ocean_blue' | 'ruby_crimson' | 'slate_dark';

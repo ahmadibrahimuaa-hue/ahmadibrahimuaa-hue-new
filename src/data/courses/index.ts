@@ -8,14 +8,14 @@ import { getCustomStoredCourses } from '../../utils/courseCustomStorage';
 export { SAKINAN_COURSE, IDGHAM_COURSE, MAKHARIJ_COURSE, IJAZAH_COURSE, FOUNDATIONAL_RULES_COURSE };
 
 export const ALL_COURSES: Course[] = [
+  FOUNDATIONAL_RULES_COURSE,
   SAKINAN_COURSE,
   IDGHAM_COURSE,
   MAKHARIJ_COURSE,
-  FOUNDATIONAL_RULES_COURSE,
   IJAZAH_COURSE,
 ];
 
-export const DEFAULT_COURSE_ID = 'sakinan';
+export const DEFAULT_COURSE_ID = 'foundational_rules';
 
 export const getAllCourses = (): Course[] => {
   return getCustomStoredCourses();
@@ -23,9 +23,9 @@ export const getAllCourses = (): Course[] => {
 
 export const getCourseById = (id?: string): Course => {
   const all = getCustomStoredCourses();
-  if (!id) return all[0] || SAKINAN_COURSE;
+  if (!id) return all[0] || FOUNDATIONAL_RULES_COURSE;
   const found = all.find((c) => c.id === id);
-  return found || all[0] || SAKINAN_COURSE;
+  return found || all[0] || FOUNDATIONAL_RULES_COURSE;
 };
 
 export const getActiveCourses = (): Course[] => {

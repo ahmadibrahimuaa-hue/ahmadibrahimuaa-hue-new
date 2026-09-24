@@ -98,67 +98,42 @@ export const StudentBar: React.FC<StudentBarProps> = ({
 
   return (
     <>
-      <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border border-emerald-700/50 rounded-2xl p-4 mb-6 shadow-md font-tajawal no-print">
-        <div className="flex flex-col xl:flex-row items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 mb-4 shadow-xs font-tajawal no-print text-slate-200">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3">
           
-          {/* Left: Student & Trainer Info */}
-          <div className="flex items-center gap-3 w-full xl:w-auto">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center font-bold font-quran text-lg shadow-md shrink-0 border border-amber-300">
-              <User className="w-6 h-6" />
+          {/* Left: Student & Trainer Info - Calm & Unboxed */}
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
+            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center shrink-0">
+              <User className="w-4 h-4" />
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-quran">
-                  حساب الدارس القرآني
-                </span>
-                
-                {profile?.trainerName ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-200 bg-emerald-800/60 px-2.5 py-0.5 rounded-full border border-emerald-600/50 font-quran">
-                    <School className="w-3 h-3 text-amber-400" />
-                    <span>المعلم المشرف: {profile.trainerName}</span>
-                    {profile.referralCode && (
-                      <span className="text-amber-300 font-mono text-[10px]">({profile.referralCode})</span>
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700 font-quran">
-                    دراسة عامة
-                  </span>
-                )}
-              </div>
-              
+            <div className="space-y-0.5">
               {profile?.name ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-slate-300">أهلاً بك:</span>
-                  <span className="text-sm sm:text-base font-bold font-quran text-amber-200">{profile.name}</span>
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <span className="font-bold font-quran text-slate-100">{profile.name}</span>
+                  {profile.trainerName && (
+                    <>
+                      <span className="text-slate-600">·</span>
+                      <span className="text-slate-400">المشرف: {profile.trainerName}</span>
+                    </>
+                  )}
                   {onOpenRegistrationModal && (
                     <button
                       onClick={onOpenRegistrationModal}
-                      className="text-amber-300 hover:text-amber-100 p-1 rounded-lg hover:bg-emerald-800/50 transition-all text-xs flex items-center gap-1 cursor-pointer"
-                      title="تعديل بيانات الطالب أو ربط كود المعلم"
+                      className="text-slate-400 hover:text-slate-200 text-[11px] hover:underline cursor-pointer"
                     >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>تعديل الحساب / الكود</span>
+                      تعديل
                     </button>
                   )}
-                  <button
-                    onClick={() => setShowLogoutConfirm(true)}
-                    className="text-red-300 hover:text-red-100 hover:bg-red-950/60 border border-red-500/40 rounded-lg px-2 py-0.5 text-xs font-quran flex items-center gap-1 transition-all cursor-pointer"
-                    title="تسجيل الخروج من حساب الطالب"
-                  >
-                    <LogOut className="w-3.5 h-3.5 text-red-400" />
-                    <span>تسجيل الخروج</span>
-                  </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-amber-300 font-bold">لم يتم تسجيل اسم الطالب بعد</span>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">حساب دارس عام</span>
                   {onOpenRegistrationModal && (
                     <button
                       onClick={onOpenRegistrationModal}
-                      className="bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-lg text-xs font-bold font-quran hover:bg-amber-300 cursor-pointer"
+                      className="text-amber-300 hover:underline font-bold text-xs cursor-pointer"
                     >
-                      تسجيل الآن
+                      تسجيل الاسم
                     </button>
                   )}
                 </div>
@@ -167,128 +142,49 @@ export const StudentBar: React.FC<StudentBarProps> = ({
           </div>
 
           {/* Middle: Badges Showcase & Quick Student Utilities */}
-          <div className="flex items-center justify-center gap-2 w-full xl:w-auto flex-wrap">
+          <div className="flex items-center gap-1.5 w-full md:w-auto flex-wrap justify-start md:justify-end">
             
             {/* Badges Button */}
             <button
               onClick={() => setIsBadgesModalOpen(true)}
-              className="bg-slate-950/80 hover:bg-slate-900 border border-amber-500/40 hover:border-amber-400 rounded-xl px-3 py-2 transition-all flex items-center gap-2.5 group cursor-pointer shadow-inner"
+              className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer text-xs text-slate-300 hover:text-white"
               title="عرض سجل الأوسمة والإنجازات المكتسبة"
             >
-              <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-sm shrink-0 group-hover:scale-110 transition-transform">
-                🏅
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-amber-300 font-bold font-quran">
-                  أوسمة التميز:
-                </div>
-                <div className="text-xs font-black font-quran text-slate-100">
-                  <span>{unlockedBadges.length} / {badges.length} وساماً</span>
-                </div>
-              </div>
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span>{unlockedBadges.length} أوسمة</span>
             </button>
 
             {/* Daily Study Planner Button */}
             <button
               onClick={() => setIsPlannerModalOpen(true)}
-              className="bg-slate-950/80 hover:bg-slate-900 border border-emerald-600/50 hover:border-emerald-400 rounded-xl px-3 py-2 transition-all flex items-center gap-2.5 cursor-pointer shadow-inner"
+              className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer text-xs text-slate-300 hover:text-white"
               title="مخطط الدراسة اليومي والتذكير الذكي"
             >
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-emerald-300 font-bold font-quran flex items-center gap-1">
-                  <span>مخطط اليوم:</span>
-                  <Flame className="w-3 h-3 text-amber-400 fill-current" />
-                  <span className="text-amber-400 font-sans">{plannerData.streakCount}d</span>
-                </div>
-                <div className="text-xs font-bold font-tajawal text-slate-200 line-clamp-1 max-w-[110px]">
-                  {plannerData.dailyGoalLabel.split(' ')[0]}
-                </div>
-              </div>
+              <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+              <span>مخطط اليوم ({plannerData.streakCount}d)</span>
             </button>
 
             {/* Student Notes Drawer Button */}
             <button
               onClick={() => setIsNotesDrawerOpen(true)}
-              className="bg-slate-950/80 hover:bg-slate-900 border border-slate-700 hover:border-amber-400/60 rounded-xl px-3 py-2 transition-all flex items-center gap-2 cursor-pointer shadow-inner text-amber-200"
+              className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer text-xs text-slate-300 hover:text-white"
               title="مفكرة الطالب للتدوين والملاحظات"
             >
-              <FileText className="w-4 h-4 text-amber-400" />
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 block font-quran">المفكرة:</span>
-                <span className="text-xs font-bold font-quran">{notesCount} ملاحظة</span>
-              </div>
+              <FileText className="w-3.5 h-3.5 text-amber-400" />
+              <span>المفكرة ({notesCount})</span>
             </button>
-
-            {/* Sakinan Search Button */}
-            {onOpenSearch && activeCourseId === 'sakinan' && (
-              <button
-                onClick={onOpenSearch}
-                className="bg-slate-950/80 hover:bg-slate-900 border border-amber-400/60 hover:border-amber-300 rounded-xl px-3 py-2 transition-all flex items-center gap-2 cursor-pointer shadow-inner text-amber-300"
-                title="افتح شريط البحث الفوري"
-              >
-                <Search className="w-4 h-4 text-amber-400" />
-                <div className="text-right">
-                  <span className="text-[10px] text-amber-400/80 block font-quran">البحث الفوري:</span>
-                  <span className="text-xs font-bold font-quran">بحث الحقيبة 🔍</span>
-                </div>
-              </button>
-            )}
 
             {/* Favorite Lessons Button */}
             <button
               onClick={() => setIsFavoritesModalOpen(true)}
-              className="bg-slate-950/80 hover:bg-slate-900 border border-slate-700 hover:border-rose-500/60 rounded-xl px-3 py-2 transition-all flex items-center gap-2 cursor-pointer shadow-inner text-rose-300 group"
+              className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors flex items-center gap-1.5 cursor-pointer text-xs text-slate-300 hover:text-white"
               title="عرض قائمة دروسي المفضلة"
             >
-              <div className="w-7 h-7 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0 group-hover:scale-110 transition-transform">
-                <Heart className="w-4 h-4 fill-rose-500/40 text-rose-400" />
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 block font-quran">المفضلة:</span>
-                <span className="text-xs font-bold font-quran text-rose-300">{favoritesCount} درس ❤️</span>
-              </div>
-            </button>
-
-            {/* Share Achievement Button */}
-            <button
-              onClick={() => setIsShareModalOpen(true)}
-              className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black rounded-xl px-3.5 py-2 transition-all flex items-center gap-1.5 cursor-pointer shadow-md text-xs font-quran"
-              title="مشاركة بطاقة الإنجاز والدرجات عبر وسائل التواصل"
-            >
-              <Share2 className="w-4 h-4 text-slate-950 fill-current" />
-              <span>مشاركة الإنجاز</span>
+              <Heart className="w-3.5 h-3.5 text-rose-400" />
+              <span>المفضلة ({favoritesCount})</span>
             </button>
 
           </div>
-
-          {/* Right side: Progress gauge & Quick Modal trigger */}
-          <div className="flex items-center gap-3 w-full xl:w-auto justify-end">
-            {onOpenProgressModal && (
-              <button
-                onClick={onOpenProgressModal}
-                className="w-full xl:w-auto bg-slate-950/80 hover:bg-slate-900 border border-emerald-700/60 rounded-xl px-4 py-2 text-right transition-all flex items-center justify-between xl:justify-start gap-3 group cursor-pointer shadow-inner"
-                title="انقر لفتح شاشة تفاصيل الإنجاز والتقدم الدراسي"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-3 text-[11px] font-bold font-quran">
-                    <span className="text-emerald-200">نسبة التقدم بالحقيبة:</span>
-                    <span className="text-amber-400 font-mono">{progressPct}%</span>
-                  </div>
-                  <div className="w-28 sm:w-32 bg-slate-800 rounded-full h-2 mt-1.5 overflow-hidden border border-slate-700">
-                    <div
-                      className="bg-gradient-to-r from-emerald-500 to-amber-400 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${progressPct}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <Trophy className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-              </button>
-            )}
-          </div>
-
         </div>
       </div>
 
