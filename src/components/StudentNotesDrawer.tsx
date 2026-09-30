@@ -21,7 +21,7 @@ interface StudentNotesDrawerProps {
 export const StudentNotesDrawer: React.FC<StudentNotesDrawerProps> = ({
   isOpen,
   onClose,
-  activeCourseId = 'sakinan',
+  activeCourseId = 'foundational_rules',
   currentUnitNumber,
   currentUnitTitle,
 }) => {

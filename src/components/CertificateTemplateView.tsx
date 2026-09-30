@@ -18,7 +18,7 @@ export const CertificateTemplateView: React.FC<Props> = ({
   config,
   className = '',
   onPrint,
-  courseId = 'sakinan',
+  courseId = 'foundational_rules',
   unitTitle,
   certTypeLabel,
 }) => {

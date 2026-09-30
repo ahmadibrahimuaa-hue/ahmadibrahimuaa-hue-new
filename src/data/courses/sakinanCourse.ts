@@ -11,7 +11,7 @@ export const SAKINAN_COURSE: Course = {
   title: 'التقاء الساكنين في التلاوة',
   shortTitle: 'التقاء الساكنين',
   subtitle: 'منهج تعليمي تطبيقي متدرج لمعلمي القرآن الكريم والقراءات',
-  badge: 'الحقيبة الأولى (المبتدئ)',
+  badge: 'حقيبة قواعد التقاء الساكنين',
   iconName: 'Sparkles',
   description: 'حقيبة تدريبية متكاملة تهدف إلى ضبط أحكام التخلص من التقاء الساكنين في القرآن الكريم وصلاً ووقفاً، وفق رواية حفص عن عاصم وعامة القراء.',
   author: 'أحمد إبراهيم',
@@ -24,7 +24,7 @@ export const SAKINAN_COURSE: Course = {
   books: SCHOLARLY_BOOKS,
   status: 'available',
   level: 'beginner',
-  levelText: 'حقيبة المستوى التأسيسي (المبتدئ)',
+  levelText: 'حقيبة تخصصية تطبيقية (التقاء الساكنين)',
   targetAudience: 'معلمو ومعلمات القرآن الكريم، وطلبة العلم المجازين والمبتدئين',
   pricing: {
     isPaid: false,

@@ -13,7 +13,7 @@ interface BadgesModalProps {
 export const BadgesModal: React.FC<BadgesModalProps> = ({
   isOpen,
   onClose,
-  activeCourseId = 'sakinan',
+  activeCourseId = 'foundational_rules',
 }) => {
   const [selectedCourseId, setSelectedCourseId] = useState<string>(activeCourseId);
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'unit' | 'exam' | 'special'>('all');

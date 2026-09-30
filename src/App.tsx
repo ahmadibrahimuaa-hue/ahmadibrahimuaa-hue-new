@@ -19,7 +19,7 @@ import { LockedCoursePreview } from './components/LockedCoursePreview';
 import { BagManagementPanel } from './components/BagManagementPanel';
 import { BadgeEarnedToast } from './components/BadgeEarnedToast';
 import { QuranFontModal } from './components/QuranFontModal';
-import { getStudentProgress, subscribeStudentProgress, calculateProgressPercentage, markSectionRead, isCourseUnlocked, isCoursePassed } from './utils/studentProgressStorage';
+import { getStudentProgress, subscribeStudentProgress, calculateProgressPercentage, markSectionRead, isCourseUnlocked, isCoursePassed, markCourseOpened } from './utils/studentProgressStorage';
 import { getStudentProfile, subscribeStudentProfile } from './utils/studentStorage';
 import { getCurrentAuthTrainer, setCurrentAuthTrainer, SUPER_ADMIN_ACCOUNT, subscribeTrainers, getAllTrainersAsync, clearStaleAuthSessions } from './utils/trainerStorage';
 import { getAllCourses, SAKINAN_COURSE, FOUNDATIONAL_RULES_COURSE, DEFAULT_COURSE_ID, getCourseById } from './data/courses';
@@ -32,6 +32,7 @@ import { SakinanSearchResult } from './utils/sakinanSearchEngine';
 import { ShareAchievementModal } from './components/ShareAchievementModal';
 import { FavoriteLessonsModal } from './components/FavoriteLessonsModal';
 import { CourseSidebar } from './components/CourseSidebar';
+import { PresentationModeView } from './components/PresentationModeView';
 import { logoutStudent } from './utils/studentStorage';
 import { 
   BookOpen, GraduationCap, Table, Bookmark, Book, 
@@ -54,6 +55,14 @@ export default function App() {
   const [showFavoritesModal, setShowFavoritesModal] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+  const [showPresentationMode, setShowPresentationMode] = useState<boolean>(false);
+
+  // Track opened courses
+  useEffect(() => {
+    if (activeCourseId) {
+      markCourseOpened(activeCourseId);
+    }
+  }, [activeCourseId]);
 
   // Focus mode exit on Escape key
   useEffect(() => {
@@ -87,7 +96,8 @@ export default function App() {
 
   const handleSelectSearchResult = (result: SakinanSearchResult) => {
     setShowSearchModal(false);
-    setActiveCourseId('sakinan');
+    const targetCourseId = result.courseId || activeCourseId || DEFAULT_COURSE_ID;
+    setActiveCourseId(targetCourseId);
     setActiveTab(result.targetTab);
     if (result.unitIndex !== undefined) {
       setSelectedUnitIndex(result.unitIndex);
@@ -366,6 +376,7 @@ export default function App() {
             onOpenSearch={() => setShowSearchModal(true)}
             onOpenProgressModal={() => setShowProgressModal(true)}
             onOpenFavorites={() => setShowFavoritesModal(true)}
+            onOpenPresentationMode={() => setShowPresentationMode(true)}
           />
         )}
 
@@ -447,7 +458,7 @@ export default function App() {
             <LockedCoursePreview
               course={activeCourse}
               onReturnToActiveCourse={(cId) => {
-                setActiveCourseId(cId || 'sakinan');
+                setActiveCourseId(cId || DEFAULT_COURSE_ID);
                 setActiveTab('cover');
                 setSelectedUnitIndex(0);
                 setSelectedLessonIndex(0);
@@ -562,10 +573,14 @@ export default function App() {
           onClose={() => setShowProgressModal(false)}
           activeCourseId={activeCourseId}
           onSelectCourse={(cId) => setActiveCourseId(cId)}
-          onNavigateTab={(tabId, unitIndex) => {
+          isTeacherMode={isTeacherMode}
+          onNavigateTab={(tabId, unitIndex, lessonIndex) => {
             setActiveTab(tabId);
             if (unitIndex !== undefined) {
               setSelectedUnitIndex(unitIndex);
+            }
+            if (lessonIndex !== undefined) {
+              setSelectedLessonIndex(lessonIndex);
             }
           }}
         />
@@ -667,33 +682,24 @@ export default function App() {
                   قفل التتابع المنهجي
                 </span>
                 <h3 className="text-xl font-bold font-quran text-slate-900 mt-1">
-                  الحقيبة الثانية مغلقة حالياً 🔒
+                  الحقيبة مقفلة حالياً 🔒
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-xs mx-auto">
-                  تفتح هذه الحقيبة (أحكام الإدغام: المتماثلين والمتجانسين والمتقاربين) تلقائياً بعد اجتياز الحقيبة الأولى (التقاء الساكنين) واجتياز اختبارها الشامل بنسبة 90% فأكثر.
+                  تتاح هذه الحقيبة ضمن منهاج دروس التجويد. يمكنك البدء في دراستها أو التواصل مع المعلم للاعتماد المباشر.
                 </p>
-              </div>
-
-              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-xs font-quran space-y-1 text-right text-slate-800">
-                <div className="flex items-center justify-between font-bold">
-                  <span>حالة التقاء الساكنين لديك:</span>
-                  <span className={isCoursePassed('sakinan') ? 'text-emerald-700' : 'text-amber-800'}>
-                    {isCoursePassed('sakinan') ? 'تم الاجتياز بنجاح ✓' : 'لم يتم اجتياز الاختبار بعد'}
-                  </span>
-                </div>
               </div>
 
               <div className="pt-2 flex flex-col gap-2">
                 <button
                   onClick={() => {
                     setShowCourseLockedModal(false);
-                    setActiveCourseId('sakinan');
+                    setActiveCourseId(DEFAULT_COURSE_ID);
                     setActiveTab('cover');
                     setSelectedUnitIndex(0);
                   }}
                   className="w-full bg-emerald-900 hover:bg-emerald-950 text-amber-300 font-bold font-quran py-3 rounded-2xl text-xs sm:text-sm transition-all shadow-md cursor-pointer border border-amber-400/30 flex items-center justify-center gap-2"
                 >
-                  <span>الانتقال لدراسة حقيبة التقاء الساكنين</span>
+                  <span>الانتقال للحقيبة المقررة</span>
                   <ArrowLeft className="w-4 h-4" />
                 </button>
                 <button
@@ -823,7 +829,7 @@ export default function App() {
         onSelectResult={handleSelectSearchResult}
         onNavigateTo={(tab, unitIdx) => {
           setShowSearchModal(false);
-          setActiveCourseId('sakinan');
+          setActiveCourseId(activeCourseId || DEFAULT_COURSE_ID);
           setActiveTab(tab as any);
           if (unitIdx !== undefined) setSelectedUnitIndex(unitIdx);
         }}
@@ -914,6 +920,17 @@ export default function App() {
             </div>
           </div>
         </footer>
+      )}
+
+      {/* Global Presentation Mode View with Drawing Tools for Teachers */}
+      {showPresentationMode && currentUnit && (
+        <PresentationModeView
+          course={activeCourse}
+          unit={currentUnit}
+          initialLessonIndex={selectedLessonIndex}
+          onClose={() => setShowPresentationMode(false)}
+          isTeacherMode={isTeacherMode}
+        />
       )}
     </div>
   );

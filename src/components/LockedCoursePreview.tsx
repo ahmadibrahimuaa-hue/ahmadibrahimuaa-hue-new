@@ -46,11 +46,11 @@ export const LockedCoursePreview: React.FC<LockedCoursePreviewProps> = ({
       {/* Return & Breadcrumb Bar */}
       <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm no-print">
         <button
-          onClick={() => onReturnToActiveCourse('sakinan')}
+          onClick={() => onReturnToActiveCourse('foundational_rules')}
           className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-300 font-quran transition-colors cursor-pointer"
         >
           <ArrowRight className="w-4 h-4" />
-          <span>العودة للحقيبة المتاحة حالياً (التقاء الساكنين)</span>
+          <span>العودة للحقيبة المقررة</span>
         </button>
 
         <button
@@ -214,10 +214,10 @@ export const LockedCoursePreview: React.FC<LockedCoursePreviewProps> = ({
 
                 {/* Return Button */}
                 <button
-                  onClick={() => onReturnToActiveCourse('sakinan')}
+                  onClick={() => onReturnToActiveCourse('foundational_rules')}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2.5 rounded-2xl border border-slate-700 font-quran transition-all cursor-pointer"
                 >
-                  العودة للحقيبة الأولى المتاحة
+                  العودة للحقيبة المقررة
                 </button>
               </div>
             </div>

@@ -173,7 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <div className="max-w-[140px] sm:max-w-[220px] md:max-w-xs truncate">
                     <span className="text-xs sm:text-sm font-bold font-quran text-slate-100 truncate block">
-                      {isHome ? 'الحقائب التجويدية المقررة' : (activeCourse.shortTitle || activeCourse.title)}
+                      {isHome ? 'منصة دروس التجويد' : (activeCourse.shortTitle || activeCourse.title)}
                     </span>
                   </div>
                   <ChevronDown className="w-3 h-3 text-slate-500 shrink-0" />

@@ -151,7 +151,7 @@ const MAKHARIJ_UNIT_BADGES_CONFIG: Record<number, { title: string; subtitle: str
 
 export const getCourseBadges = (
   prog: SingleCourseProgress,
-  courseId: string = 'sakinan'
+  courseId: string = 'foundational_rules'
 ): StudentBadge[] => {
   const course = getCourseById(courseId) || ALL_COURSES[0];
   const badges: StudentBadge[] = [];

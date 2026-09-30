@@ -43,8 +43,8 @@ export const ComprehensiveExamView: React.FC<ComprehensiveExamViewProps> = ({
   isTeacherMode = false,
   examBestScore = null,
 }) => {
-  const courseId = course ? course.id : 'sakinan';
-  const courseTitle = course ? course.title : 'التقاء الساكنين في التجويد';
+  const courseId = course ? course.id : 'foundational_rules';
+  const courseTitle = course ? course.title : 'أصول التلاوة والتأسيس التجويدي';
   const totalUnitsInCourse = course ? course.units.length : 5;
   const examStorageKey = `tajweed_exam_saved_result_v3_${courseId}`;
 

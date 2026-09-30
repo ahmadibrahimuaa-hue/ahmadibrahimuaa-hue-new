@@ -31,7 +31,7 @@ export const StudentBar: React.FC<StudentBarProps> = ({
   onOpenRegistrationModal,
   onOpenSearch,
   onNavigateToLesson,
-  activeCourseId = 'sakinan',
+  activeCourseId = 'foundational_rules',
   currentUnitNumber,
   currentUnitTitle,
 }) => {

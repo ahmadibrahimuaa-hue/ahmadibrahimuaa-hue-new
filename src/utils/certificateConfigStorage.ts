@@ -302,7 +302,7 @@ const sanitizeConfig = (data: Partial<CertificateConfig>): CertificateConfig => 
 
 export const getCourseCertSettings = (
   config: CertificateConfig,
-  courseId: string = 'sakinan'
+  courseId: string = 'foundational_rules'
 ): CourseCertSettings => {
   if (config.courseCertificates && config.courseCertificates[courseId]) {
     const s = config.courseCertificates[courseId];

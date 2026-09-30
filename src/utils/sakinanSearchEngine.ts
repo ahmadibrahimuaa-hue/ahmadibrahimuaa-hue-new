@@ -3,6 +3,7 @@ import { QURAN_EXAMPLES } from '../data/examplesData';
 import { EXCEPTION_WORDS_DATA } from '../data/exceptionWordsData';
 import { SUMMARY_TABLE_DATA } from '../data/summaryData';
 import { THEORY_CHAPTERS } from '../data/theoryData';
+import { getAllCourses } from '../data/courses';
 
 export type SearchResultCategory = 'all' | 'shawahid_examples' | 'lessons' | 'exceptions' | 'summary_rules';
 
@@ -16,6 +17,7 @@ export interface SakinanSearchResult {
   matchedSnippet: string;
   highlightWords: string[];
   targetTab: 'units' | 'examples' | 'exceptions' | 'summary' | 'rules';
+  courseId?: string;
   unitIndex?: number;
   lessonId?: string;
   exampleId?: string;
@@ -133,6 +135,7 @@ export function searchSakinanCourse(
           matchedSnippet: extractSnippet(snippetSource, trimmed),
           highlightWords: [trimmed, ...queryTokens],
           targetTab: 'examples',
+          courseId: 'sakinan',
           exampleId: ex.id,
           badgeText: ex.method.trim(),
           metaInfo: `الأول: ${ex.firstSukoon} | الثاني: ${ex.secondSukoon}`,
@@ -141,43 +144,47 @@ export function searchSakinanCourse(
     }
   }
 
-  // 2. البحث في أبواب ودروس الكتاب التدريبي (CURRICULUM_UNITS)
+  // 2. البحث في أبواب ودروس جميع الحقائب التعليمية المقررة
   if (category === 'all' || category === 'lessons') {
-    CURRICULUM_UNITS.forEach((unit, uIdx) => {
-      // بحث في عنوان الباب ووصفه
-      const matchUnitTitle = textMatches(unit.title, normQuery, queryTokens);
-      const matchUnitDesc = textMatches(unit.description, normQuery, queryTokens);
+    const allCourses = getAllCourses();
+    allCourses.forEach((c) => {
+      (c.units || []).forEach((unit, uIdx) => {
+        // بحث في عنوان الباب ووصفه
+        const matchUnitTitle = textMatches(unit.title, normQuery, queryTokens);
+        const matchUnitDesc = textMatches(unit.description, normQuery, queryTokens);
 
-      unit.lessons.forEach((lesson) => {
-        const matchLessonTitle = textMatches(lesson.title, normQuery, queryTokens);
-        const matchLessonSubtitle = textMatches(lesson.subtitle, normQuery, queryTokens);
-        const matchContent = textMatches(lesson.contentMarkdown, normQuery, queryTokens);
-        const matchObjectives = lesson.objectives?.some(obj => textMatches(obj, normQuery, queryTokens));
-        const matchHomework = textMatches(lesson.homeworkTask || '', normQuery, queryTokens);
+        (unit.lessons || []).forEach((lesson) => {
+          const matchLessonTitle = textMatches(lesson.title, normQuery, queryTokens);
+          const matchLessonSubtitle = textMatches(lesson.subtitle || '', normQuery, queryTokens);
+          const matchContent = textMatches(lesson.contentMarkdown || '', normQuery, queryTokens);
+          const matchObjectives = lesson.objectives?.some(obj => textMatches(obj, normQuery, queryTokens));
+          const matchHomework = textMatches(lesson.homeworkTask || '', normQuery, queryTokens);
 
-        if (matchLessonTitle || matchLessonSubtitle || matchContent || matchObjectives || matchHomework || matchUnitTitle || matchUnitDesc) {
-          const snippetSource = matchContent
-            ? lesson.contentMarkdown
-            : matchLessonSubtitle 
-              ? `${lesson.title} - ${lesson.subtitle}` 
-              : unit.description;
+          if (matchLessonTitle || matchLessonSubtitle || matchContent || matchObjectives || matchHomework || matchUnitTitle || matchUnitDesc) {
+            const snippetSource = matchContent
+              ? lesson.contentMarkdown
+              : matchLessonSubtitle 
+                ? `${lesson.title} - ${lesson.subtitle}` 
+                : unit.description;
 
-          results.push({
-            id: `lesson-${lesson.id}`,
-            category: 'lessons',
-            categoryLabel: `الباب ${unit.unitNumber}: درس تعليمي`,
-            categoryColor: 'bg-amber-50 text-amber-900 border-amber-300',
-            title: lesson.title,
-            subtitle: `${unit.title} • ${lesson.subtitle}`,
-            matchedSnippet: extractSnippet(snippetSource, trimmed),
-            highlightWords: [trimmed, ...queryTokens],
-            targetTab: 'units',
-            unitIndex: uIdx,
-            lessonId: lesson.id,
-            badgeText: `الباب ${unit.unitNumber}`,
-            metaInfo: `درس ${lesson.lessonNumber}`,
-          });
-        }
+            results.push({
+              id: `lesson-${c.id}-${unit.id}-${lesson.id}`,
+              category: 'lessons',
+              categoryLabel: `${c.shortTitle || c.title} • الباب ${unit.unitNumber}`,
+              categoryColor: 'bg-amber-50 text-amber-900 border-amber-300',
+              title: lesson.title,
+              subtitle: `${c.shortTitle || c.title} • ${unit.title} • ${lesson.subtitle || ''}`,
+              matchedSnippet: extractSnippet(snippetSource, trimmed),
+              highlightWords: [trimmed, ...queryTokens],
+              targetTab: 'units',
+              courseId: c.id,
+              unitIndex: uIdx,
+              lessonId: lesson.id,
+              badgeText: c.shortTitle || `الباب ${unit.unitNumber}`,
+              metaInfo: `درس ${lesson.lessonNumber}`,
+            });
+          }
+        });
       });
     });
   }
@@ -204,6 +211,7 @@ export function searchSakinanCourse(
           matchedSnippet: extractSnippet(matchOrigin ? exc.originText : matchCause ? exc.sukoonCause : exc.disposalMethod, trimmed),
           highlightWords: [trimmed, ...queryTokens],
           targetTab: 'exceptions',
+          courseId: 'sakinan',
           badgeText: exc.isHafsSpecific ? 'خاصة بحفص' : 'عامة القراء',
           metaInfo: exc.disposalMethod,
         });
@@ -232,6 +240,7 @@ export function searchSakinanCourse(
           matchedSnippet: extractSnippet(`${sum.exampleText} - ${sum.tajweedRule} - ${sum.condition}`, trimmed),
           highlightWords: [trimmed, ...queryTokens],
           targetTab: 'summary',
+          courseId: 'sakinan',
           badgeText: sum.disposalMethod,
           metaInfo: sum.surahRef,
         });
@@ -255,6 +264,7 @@ export function searchSakinanCourse(
           matchedSnippet: extractSnippet(chap.content, trimmed),
           highlightWords: [trimmed, ...queryTokens],
           targetTab: 'rules',
+          courseId: 'sakinan',
           badgeText: 'تأصيل نظري',
         });
       }

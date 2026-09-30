@@ -596,7 +596,7 @@ export const InstituteThemeCustomizerPanel: React.FC<InstituteThemeCustomizerPan
               {/* Title & Badge */}
               <div className="space-y-1">
                 <h4 className="text-lg sm:text-xl font-black font-quran text-amber-200">
-                  التقاء الساكنين في التجويد
+                  دروس التجويد
                 </h4>
                 <p className="text-xs text-slate-200/90 font-tajawal max-w-sm mx-auto">
                   {currentEdit.instituteSubtitle || 'منهج تعليمي تطبيقي متدرج لمعلمي القرآن الكريم والقراءات'}

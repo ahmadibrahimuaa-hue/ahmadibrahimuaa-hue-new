@@ -43,7 +43,7 @@ export const TeacherWaitlistPanel: React.FC<TeacherWaitlistPanelProps> = ({ acti
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newStudentName, setNewStudentName] = useState<string>('');
   const [newStudentPhone, setNewStudentPhone] = useState<string>('');
-  const [newSelectedCourse, setNewSelectedCourse] = useState<string>(activeCourseId || 'sakinan');
+  const [newSelectedCourse, setNewSelectedCourse] = useState<string>(activeCourseId || 'foundational_rules');
   const [newAutoUnlock, setNewAutoUnlock] = useState<boolean>(true);
   const [isAdding, setIsAdding] = useState<boolean>(false);
 

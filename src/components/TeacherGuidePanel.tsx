@@ -14,11 +14,11 @@ interface TeacherGuidePanelProps {
 }
 
 export const TeacherGuidePanel: React.FC<TeacherGuidePanelProps> = ({
-  activeCourseId = 'sakinan',
+  activeCourseId = 'foundational_rules',
   onSelectCourseToView
 }) => {
   const [courses, setCourses] = useState<Course[]>(() => getAllCourses());
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(activeCourseId || 'sakinan');
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(activeCourseId || 'foundational_rules');
   const [selectedUnitNumber, setSelectedUnitNumber] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedLessonIds, setExpandedLessonIds] = useState<Record<string, boolean>>({});

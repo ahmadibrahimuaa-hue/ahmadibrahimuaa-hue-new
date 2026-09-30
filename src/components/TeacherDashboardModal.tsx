@@ -54,29 +54,12 @@ interface TeacherDashboardModalProps {
   authRole?: 'super_admin' | 'trainer';
 }
 
-const SAKINAN_UNIT_TITLES: Record<number, string> = {
-  1: 'الباب الأول: المدخل إلى التقاء الساكنين',
-  2: 'الباب الثاني: التقاء الساكنين في كلمة واحدة',
-  3: 'الباب الثالث: التقاء الساكنين في كلمتين (المتحرك بالكسر)',
-  4: 'الباب الرابع: التقاء الساكنين في كلمتين (المتحرك بالفتح والضم)',
-  5: 'الباب الخامس: الحذف والوقف والعارض',
-  6: 'الباب السادس: الاستثناءات والكلمات الخلافية',
-};
-
-const IDGHAM_UNIT_TITLES: Record<number, string> = {
-  1: 'الباب الأول: إدغام المتماثلين (المثلين) وأقسامه واستثناءاته',
-  2: 'الباب الثاني: إدغام المتجانسين الصغير وأقسامه واستثناءاته',
-  3: 'الباب الثالث: إدغام المتقاربين الصغير ومواضع حفص الخمسة',
-  4: 'الباب الرابع: الإدغام الكبير والمطلق ومذهب حفص فيهما',
-  5: 'الباب الخامس: علامات ضبط الإدغام في رسم المصحف وتوجيهه',
-};
-
 export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   isOpen,
   onClose,
   onLockTeacherMode,
   initialTab = 'submissions',
-  activeCourseId = 'sakinan',
+  activeCourseId = 'foundational_rules',
   authTrainer = null,
   authRole = 'trainer',
 }) => {
@@ -98,7 +81,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   }, []);
 
   // Selected Course within Teacher Dashboard
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(activeCourseId || 'sakinan');
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(activeCourseId || 'foundational_rules');
 
   // Trainer filter for Submissions (for super admin or switching view)
   const [trainerFilter, setTrainerFilter] = useState<string>('all');
@@ -109,7 +92,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   const [certSavedSuccess, setCertSavedSuccess] = useState<boolean>(false);
   const [certSavedError, setCertSavedError] = useState<string>('');
   const [savingCert, setSavingCert] = useState<boolean>(false);
-  const [certCourseTab, setCertCourseTab] = useState<string>(activeCourseId || 'sakinan');
+  const [certCourseTab, setCertCourseTab] = useState<string>(activeCourseId || 'foundational_rules');
   const [certPreviewPercentage, setCertPreviewPercentage] = useState<number>(95);
 
   useEffect(() => {
@@ -246,9 +229,15 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   const [examQLevel, setExamQLevel] = useState<ExamDifficultyLevel>('intermediate');
   const [examQLevelFilter, setExamQLevelFilter] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
 
+  const allCourses = getAllCourses();
+  const currentCourse = getCourseById(selectedCourseId) || allCourses[0];
+  const courseUnits = currentCourse?.units || [];
+  const availableUnitNumbers = courseUnits.length > 0 ? courseUnits.map((u) => u.unitNumber) : [1];
+  const unitTitlesMap: Record<number, string> = courseUnits.reduce((acc, u) => {
+    acc[u.unitNumber] = u.title;
+    return acc;
+  }, {} as Record<number, string>);
   const isIdgham = selectedCourseId === 'idgham';
-  const unitTitlesMap = isIdgham ? IDGHAM_UNIT_TITLES : SAKINAN_UNIT_TITLES;
-  const availableUnitNumbers = isIdgham ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6];
 
   const fetchSubmissions = async () => {
     setLoading(true);
@@ -320,10 +309,10 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
 
   // Make sure selectedUnitNumber is valid for current course
   useEffect(() => {
-    if (isIdgham && selectedUnitNumber > 5) {
-      setSelectedUnitNumber(1);
+    if (availableUnitNumbers.length > 0 && !availableUnitNumbers.includes(selectedUnitNumber)) {
+      setSelectedUnitNumber(availableUnitNumbers[0] || 1);
     }
-  }, [selectedCourseId]);
+  }, [selectedCourseId, availableUnitNumbers, selectedUnitNumber]);
 
   if (!isOpen) return null;
 
@@ -458,7 +447,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   };
 
   const handleResetDefaults = async () => {
-    const courseLabel = isIdgham ? 'حقيبة أحكام الإدغام' : 'حقيبة التقاء الساكنين';
+    const courseLabel = currentCourse.shortTitle || currentCourse.title;
     if (window.confirm(`هل أنت متأكد من استعادة كافة الأسئلة الافتراضية الأصلية لـ (${courseLabel})؟ سيتم إلغاء التعديلات المخصصة.`)) {
       await resetQuestionsToDefault(selectedCourseId);
       alert(`تم استعادة بنك الأسئلة الافتراضي الأصلي لـ (${courseLabel}) بنجاح.`);
@@ -541,7 +530,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
                   لوحة التحكم الخاصة بالمعلم والمدرب
                 </span>
                 <span className="bg-emerald-900/80 text-amber-300 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-amber-400/30 font-quran">
-                  {isIdgham ? 'حقيبة الإدغام' : 'حقيبة التقاء الساكنين'}
+                  {currentCourse.shortTitle || currentCourse.title}
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold font-quran text-amber-100 mt-1">
@@ -572,38 +561,31 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
 
         {/* Course Switcher Bar inside Teacher Dashboard */}
         <div className="bg-slate-950 px-5 py-2.5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-amber-300 font-bold font-quran flex items-center gap-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-amber-300 font-bold font-quran flex items-center gap-1.5 shrink-0">
               <BookOpen className="w-3.5 h-3.5 text-amber-400" />
               اختر الحقيبة التدريبية المراد إدارتها:
             </span>
-            <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
-              <button
-                onClick={() => {
-                  setSelectedCourseId('sakinan');
-                  setSelectedUnitNumber(1);
-                }}
-                className={`px-3 py-1 rounded-lg text-xs font-bold font-quran transition-all cursor-pointer ${
-                  selectedCourseId === 'sakinan'
-                    ? 'bg-emerald-700 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                1. التقاء الساكنين
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedCourseId('idgham');
-                  setSelectedUnitNumber(1);
-                }}
-                className={`px-3 py-1 rounded-lg text-xs font-bold font-quran transition-all cursor-pointer ${
-                  selectedCourseId === 'idgham'
-                    ? 'bg-indigo-700 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                2. أحكام الإدغام (المثلين، المتجانسين، المتقاربين)
-              </button>
+            <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-700 overflow-x-auto max-w-full">
+              {allCourses.map((c, idx) => {
+                const isSelected = selectedCourseId === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      setSelectedCourseId(c.id);
+                      setSelectedUnitNumber(c.units?.[0]?.unitNumber || 1);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-emerald-700 text-white shadow-md border border-emerald-500 font-extrabold'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent'
+                    }`}
+                  >
+                    <span>{idx + 1}. {c.shortTitle || c.title}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -665,7 +647,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
               }`}
             >
               <BookOpen className="w-4 h-4" />
-              <span>إدارة أسئلة أبواب الدروس ({isIdgham ? '5 أبواب' : '6 أبواب'})</span>
+              <span>إدارة أسئلة أبواب الدروس ({availableUnitNumbers.length} أبواب)</span>
             </button>
 
             <button
@@ -977,12 +959,12 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
           {activeTab === 'unit_questions' && (
             <div className="space-y-6">
               {/* Unit selector bar */}
-              <div className={`${isIdgham ? 'bg-indigo-950 border-indigo-800' : 'bg-emerald-950 border-emerald-800'} text-white p-4 rounded-2xl space-y-3 shadow-md border`}>
+              <div className="bg-emerald-950 border-emerald-800 text-white p-4 rounded-2xl space-y-3 shadow-md border">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2 font-quran text-amber-300 text-sm font-bold">
                     <BookOpen className="w-4 h-4 text-amber-400" />
                     <span>
-                      اختر الباب العلمي في ({isIdgham ? 'حقيبة أحكام الإدغام' : 'حقيبة التقاء الساكنين'}) لإدارة أسئلته:
+                      اختر الباب العلمي في ({currentCourse.shortTitle || currentCourse.title}) لإدارة أسئلته:
                     </span>
                   </div>
                   <button
@@ -1003,8 +985,6 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
                       className={`p-2.5 rounded-xl text-xs font-bold transition-all text-center cursor-pointer border ${
                         selectedUnitNumber === num
                           ? 'bg-amber-400 text-slate-950 border-amber-300 font-extrabold shadow-md scale-[1.02]'
-                          : isIdgham
-                          ? 'bg-indigo-900/60 text-indigo-100 hover:bg-indigo-800 border-indigo-700/50'
                           : 'bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800 border-emerald-700/50'
                       }`}
                     >
@@ -1109,12 +1089,12 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
           {activeTab === 'exam_questions' && (
             <div className="space-y-6">
               {/* Exam Bank Header Toolbar */}
-              <div className={`bg-gradient-to-r ${isIdgham ? 'from-indigo-950 via-slate-900 to-indigo-950 border-indigo-800' : 'from-emerald-950 via-slate-900 to-emerald-950 border-emerald-800'} text-white p-4 rounded-2xl space-y-3 shadow-md border`}>
+              <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 border-emerald-800 text-white p-4 rounded-2xl space-y-3 shadow-md border">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2 font-quran text-amber-300 text-sm font-bold">
                     <Layers className="w-4 h-4 text-amber-400" />
                     <span>
-                      بنك أسئلة (الاختبار النهائي الشامل) لـ ({isIdgham ? 'حقيبة أحكام الإدغام' : 'حقيبة التقاء الساكنين'}) - إجمالي: {comprehensiveQuestions.length} سؤالاً
+                      بنك أسئلة (الاختبار النهائي الشامل) لـ ({currentCourse.shortTitle || currentCourse.title}) - إجمالي: {comprehensiveQuestions.length} سؤالاً
                     </span>
                   </div>
                   <button
@@ -1135,7 +1115,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
                       onChange={(e) => setSelectedUnitNumber(Number(e.target.value))}
                       className="bg-slate-800 text-amber-100 border border-slate-700 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
                     >
-                      <option value={0}>جميع الأبواب (1 - {isIdgham ? '5' : '6'})</option>
+                      <option value={0}>جميع الأبواب (1 - {availableUnitNumbers.length})</option>
                       {availableUnitNumbers.map((uNum) => (
                         <option key={uNum} value={uNum}>الباب {uNum}</option>
                       ))}
@@ -1726,7 +1706,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
               <h3 className="text-lg font-bold font-quran text-slate-900">
                 {editingUnitQ ? 'تعديل صياغة أو خيارات سؤال الدرس' : 'إضافة سؤال جديد لاختبار الباب'}
                 <span className="text-xs text-amber-800 font-sans mr-2">
-                  ({isIdgham ? 'حقيبة الإدغام' : 'حقيبة الساكنين'} - الباب {selectedUnitNumber})
+                  ({currentCourse.shortTitle || currentCourse.title} - الباب {selectedUnitNumber})
                 </span>
               </h3>
               <button
@@ -1863,7 +1843,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
               <h3 className="text-lg font-bold font-quran text-slate-900">
                 {editingExamQ ? 'تعديل سؤال في بنك الاختبار الشامل' : 'إضافة سؤال جديد لبنك الاختبار الشامل'}
                 <span className="text-xs text-amber-800 font-sans mr-2">
-                  ({isIdgham ? 'حقيبة الإدغام' : 'حقيبة الساكنين'})
+                  ({currentCourse.shortTitle || currentCourse.title})
                 </span>
               </h3>
               <button

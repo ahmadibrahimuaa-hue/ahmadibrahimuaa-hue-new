@@ -43,7 +43,7 @@ interface BagManagementPanelProps {
 export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
   onClose,
   onSelectCourseToView,
-  activeCourseId = 'sakinan',
+  activeCourseId = 'foundational_rules',
 }) => {
   const [courses, setCourses] = useState<Course[]>(getCustomStoredCourses());
   const [selectedBagId, setSelectedBagId] = useState<string>(activeCourseId);
@@ -263,8 +263,12 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
   const handleQuickStatusToggle = (course: Course, newStatus: CourseStatus) => {
     // Preserve current isPaid and pricing strictly - do not force paid when coming_soon
     updateCourseStatus(course.id, newStatus);
+    if (newStatus === 'locked' || newStatus === 'coming_soon') {
+      revokeCourseAccessFromStudent(course.id);
+      setUnlockedStudentCourses((prev) => prev.filter((id) => id !== course.id));
+    }
     notifySuccess(`تم تحديث حالة الحقيبة "${course.shortTitle || course.title}" إلى: ${
-      newStatus === 'available' ? '🟢 نشطة ومتاحة' : newStatus === 'coming_soon' ? '⏳ قريباً - قيد الإعداد' : '🔒 مغلقة'
+      newStatus === 'available' ? '🟢 نشطة ومتاحة' : newStatus === 'coming_soon' ? '⏳ قريباً - قيد الإعداد' : '🔒 مغلقة ومقفلة في النظام كله'
     }`);
   };
 

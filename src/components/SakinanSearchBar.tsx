@@ -112,7 +112,7 @@ export const SakinanSearchBar: React.FC<SakinanSearchBarProps> = ({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
-          placeholder="ابحث بسرعة في شواهد، دروس، كلمات، أو أمثلة حقيبة التقاء الساكنين (مثال: قل ادعوا، يهدي، كسر، عاصم)..."
+          placeholder="ابحث بسرعة في دروس وقواعد وشواهد منصة دروس التجويد (مثال: الاستعاذة، النون الساكنة، قل ادعوا، الإدغام، المخارج)..."
           className="w-full pr-11 pl-20 py-3 text-sm sm:text-base rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-700/40 dark:border-slate-700 focus:border-amber-400 dark:focus:border-amber-400 text-slate-900 dark:text-slate-100 placeholder-slate-400 shadow-sm focus:shadow-md focus:outline-none transition-all font-tajawal"
         />
 
@@ -302,10 +302,10 @@ export const SakinanSearchBar: React.FC<SakinanSearchBarProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-black font-quran text-slate-900 dark:text-slate-100">
-                  البحث السريع في حقيبة «التقاء الساكنين»
+                  البحث السريع في منصة «دروس التجويد»
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  ابحث عن الكلمات، الشواهد القرآنية، الدروس، والاستثناءات
+                  ابحث في الشواهد القرآنية، الدروس، الأبواب، الكلمات المستثناة، وقواعد التجويد
                 </p>
               </div>
             </div>

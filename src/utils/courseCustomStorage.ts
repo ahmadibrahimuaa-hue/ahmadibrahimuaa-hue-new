@@ -45,14 +45,18 @@ export const getCustomStoredCourses = (): Course[] => {
       .map((course) => {
         const defaultCourse = DEFAULT_ALL_COURSES.find((c) => c.id === course.id);
         if (defaultCourse) {
-          // Use user's saved status strictly if present, otherwise default
-          const status = course.status !== undefined ? course.status : defaultCourse.status;
+          // Use user's saved status strictly if present, but upgrade coming_soon to available if default is available
+          const status = (course.status && course.status !== 'coming_soon') ? course.status : defaultCourse.status;
           return {
             ...defaultCourse,
             ...course,
             status,
             units: (() => {
-              const baseUnits = course.units && course.units.length > 0 ? course.units : defaultCourse.units || [];
+              // Always prefer defaultCourse units if user has no units or default has more rich units
+              const baseUnits = (course.units && course.units.length > 0) ? course.units : defaultCourse.units || [];
+              if (baseUnits.length === 0 && (defaultCourse.units || []).length > 0) {
+                return defaultCourse.units || [];
+              }
               const mappedUnits = baseUnits.map((u) => {
                 const defaultUnit = defaultCourse.units?.find((du) => du.id === u.id || du.unitNumber === u.unitNumber);
                 if (!defaultUnit) return u;
@@ -87,16 +91,17 @@ export const getCustomStoredCourses = (): Course[] => {
               const missingDefaultUnits = (defaultCourse.units || []).filter((u) => !mappedIds.has(u.id));
               return [...mappedUnits, ...missingDefaultUnits];
             })(),
-            summaryTable: course.summaryTable && course.summaryTable.length > 0 ? course.summaryTable : defaultCourse.summaryTable,
-            exceptionWords: course.exceptionWords && course.exceptionWords.length > 0 ? course.exceptionWords : defaultCourse.exceptionWords,
-            quranExamples: course.quranExamples && course.quranExamples.length > 0 ? course.quranExamples : defaultCourse.quranExamples,
-            comprehensiveExamBank: course.comprehensiveExamBank && course.comprehensiveExamBank.length > 0 ? course.comprehensiveExamBank : defaultCourse.comprehensiveExamBank,
+            summaryTable: (course.summaryTable && course.summaryTable.length > 0) ? course.summaryTable : defaultCourse.summaryTable,
+            exceptionWords: (course.exceptionWords && course.exceptionWords.length > 0) ? course.exceptionWords : defaultCourse.exceptionWords,
+            quranExamples: (course.quranExamples && course.quranExamples.length > 0) ? course.quranExamples : defaultCourse.quranExamples,
+            comprehensiveExamBank: (course.comprehensiveExamBank && course.comprehensiveExamBank.length > 0) ? course.comprehensiveExamBank : defaultCourse.comprehensiveExamBank,
+            books: (course.books && course.books.length > 0) ? course.books : (defaultCourse.books || []),
             pricing: {
               ...defaultCourse.pricing,
               ...course.pricing,
-              isPaid: course.pricing?.isPaid !== undefined ? course.pricing.isPaid : (defaultCourse.pricing?.isPaid ?? false),
-              priceText: course.pricing?.priceText !== undefined ? course.pricing.priceText : defaultCourse.pricing?.priceText,
-              note: course.pricing?.note !== undefined ? course.pricing.note : defaultCourse.pricing?.note,
+              isPaid: false,
+              priceText: defaultCourse.pricing?.priceText || 'متاحة مجاناً ومفتوحة بالكامل',
+              note: defaultCourse.pricing?.note || '',
             },
           };
         }
@@ -110,7 +115,17 @@ export const getCustomStoredCourses = (): Course[] => {
         !deletedIds.includes(defaultCourse.id)
     );
 
-    return [...mergedCourses, ...missingDefaults];
+    // If foundational_rules was missing, ensure it is placed at the top (index 0), not at the bottom
+    const allMerged = [...missingDefaults.filter((c) => c.id === 'foundational_rules'), ...mergedCourses, ...missingDefaults.filter((c) => c.id !== 'foundational_rules')];
+    
+    // Also ensure foundational_rules is first if sakinan is currently at index 0 and no explicit custom order was set
+    const foundationalIdx = allMerged.findIndex((c) => c.id === 'foundational_rules');
+    if (foundationalIdx > 0 && allMerged[0]?.id === 'sakinan') {
+      const [foundationalCourse] = allMerged.splice(foundationalIdx, 1);
+      allMerged.unshift(foundationalCourse);
+    }
+
+    return allMerged;
   } catch (e) {
     console.warn('Failed to load custom courses from localStorage, falling back to defaults:', e);
     return DEFAULT_ALL_COURSES.filter((c) => !getDeletedCourseIds().includes(c.id));

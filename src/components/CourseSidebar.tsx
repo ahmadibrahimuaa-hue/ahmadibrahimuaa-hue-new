@@ -3,9 +3,17 @@ import { Course, StudentProfile } from '../types';
 import { getAllCourses } from '../data/courses';
 import { isCourseUnlocked } from '../utils/studentProgressStorage';
 import { 
+  getCustomStoredCourses, 
+  subscribeCourses, 
+  moveCourseOrder, 
+  reorderCourses, 
+  resetCoursesToDefault 
+} from '../utils/courseCustomStorage';
+import { 
   BookOpen, Book, GraduationCap, Table, Bookmark, ShieldAlert, Award, 
   BookMarked, ChevronDown, ChevronRight, X, Lock, CheckCircle2, 
-  Search, Heart, FileText, Calendar, Trophy, Grid, Layers, UserCheck
+  Search, Heart, FileText, Calendar, Trophy, Grid, Layers, UserCheck,
+  ArrowUpDown, ArrowUp, ArrowDown, Monitor, RotateCcw, SlidersHorizontal, Check
 } from 'lucide-react';
 
 interface CourseSidebarProps {
@@ -31,6 +39,7 @@ interface CourseSidebarProps {
   onOpenNotes?: () => void;
   onOpenBadges?: () => void;
   onOpenPlanner?: () => void;
+  onOpenPresentationMode?: () => void;
 }
 
 export const CourseSidebar: React.FC<CourseSidebarProps> = ({
@@ -56,22 +65,38 @@ export const CourseSidebar: React.FC<CourseSidebarProps> = ({
   onOpenNotes,
   onOpenBadges,
   onOpenPlanner,
+  onOpenPresentationMode,
 }) => {
   const [coursesDropdownOpen, setCoursesDropdownOpen] = useState(false);
   const [unitsExpanded, setUnitsExpanded] = useState(true);
+  const [coursesSectionExpanded, setCoursesSectionExpanded] = useState(true);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [reorderSuccessMsg, setReorderSuccessMsg] = useState<string | null>(null);
+
+  const [coursesList, setCoursesList] = useState<Course[]>(() => getCustomStoredCourses());
+
+  // Subscribe to real-time course updates and reordering
+  useEffect(() => {
+    const unsub = subscribeCourses((updated) => {
+      setCoursesList(updated);
+    });
+    return () => unsub();
+  }, []);
 
   // Close sidebar on Esc
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        onClose();
+        if (showReorderModal) {
+          setShowReorderModal(false);
+        } else {
+          onClose();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  const allCourses = getAllCourses();
+  }, [isOpen, showReorderModal, onClose]);
 
   const handleTabClick = (tabId: string) => {
     if (isExamActive && tabId !== 'exam') return;
@@ -89,6 +114,39 @@ export const CourseSidebar: React.FC<CourseSidebarProps> = ({
     if (window.innerWidth < 1024) {
       onClose();
     }
+  };
+
+  const handleMoveCourse = (cId: string, direction: 'up' | 'down', e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const success = moveCourseOrder(cId, direction);
+    if (success) {
+      const updated = getCustomStoredCourses();
+      setCoursesList(updated);
+      setReorderSuccessMsg('تم تحديث ترتيب الحقائب بنجاح');
+      setTimeout(() => setReorderSuccessMsg(null), 2500);
+    }
+  };
+
+  const handleSetPresetOrder = (preset: 'foundational_first' | 'makharij_progression' | 'default') => {
+    let orderedIds: string[] = [];
+    if (preset === 'foundational_first') {
+      orderedIds = ['foundational_rules', 'sakinan', 'idgham', 'makharij', 'ijazah'];
+    } else if (preset === 'makharij_progression') {
+      orderedIds = ['foundational_rules', 'makharij', 'idgham', 'sakinan', 'ijazah'];
+    } else {
+      resetCoursesToDefault();
+      const updated = getCustomStoredCourses();
+      setCoursesList(updated);
+      setReorderSuccessMsg('تمت استعادة الترتيب الافتراضي');
+      setTimeout(() => setReorderSuccessMsg(null), 2500);
+      return;
+    }
+
+    reorderCourses(orderedIds);
+    const updated = getCustomStoredCourses();
+    setCoursesList(updated);
+    setReorderSuccessMsg('تم تطبيق الترتيب المختار بنجاح');
+    setTimeout(() => setReorderSuccessMsg(null), 2500);
   };
 
   const isUnitsIncompleteForExam = !isTeacherMode && completedUnitsCount < (activeCourse.units?.length || 1);
@@ -133,61 +191,214 @@ export const CourseSidebar: React.FC<CourseSidebarProps> = ({
           </button>
         </div>
 
-        {/* Current Course Selector Box */}
-        <div className="p-3 border-b border-slate-800/80 bg-slate-950/20 shrink-0">
-          <div className="relative">
-            <button
-              onClick={() => setCoursesDropdownOpen(!coursesDropdownOpen)}
-              className="w-full text-right p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/80 transition-colors flex items-center justify-between gap-2 cursor-pointer"
-            >
-              <div className="truncate">
-                <div className="text-[10px] text-amber-400/90 font-bold font-quran">الحقيبة الحالية:</div>
-                <div className="text-xs font-bold font-quran text-slate-100 truncate mt-0.5">
-                  {activeCourse.shortTitle || activeCourse.title}
+        {/* Current Course Selector Box with Reorder Button */}
+        <div className="p-3 border-b border-slate-800/80 bg-slate-950/20 shrink-0 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <div className="relative flex-1">
+              <button
+                onClick={() => setCoursesDropdownOpen(!coursesDropdownOpen)}
+                className="w-full text-right p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/80 transition-colors flex items-center justify-between gap-2 cursor-pointer"
+              >
+                <div className="truncate">
+                  <div className="text-[10px] text-amber-400/90 font-bold font-quran">الحقيبة الحالية:</div>
+                  <div className="text-xs font-bold font-quran text-slate-100 truncate mt-0.5">
+                    {activeCourse.shortTitle || activeCourse.title}
+                  </div>
                 </div>
-              </div>
-              <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${coursesDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
+                <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${coursesDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-            {coursesDropdownOpen && (
-              <div className="absolute top-full right-0 left-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 text-right space-y-0.5 animate-fadeIn max-h-56 overflow-y-auto">
-                {allCourses.map((c) => {
-                  const unlocked = isCourseUnlocked(c.id, isTeacherMode, c);
-                  const isSelected = c.id === activeCourseId;
-                  return (
+              {coursesDropdownOpen && (
+                <div className="absolute top-full right-0 left-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 text-right space-y-0.5 animate-fadeIn max-h-60 overflow-y-auto">
+                  <div className="px-2 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                    <span>قائمة الحقائب (بالترتيب الحالي)</span>
                     <button
-                      key={c.id}
-                      onClick={() => {
-                        onSelectCourse(c.id);
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setCoursesDropdownOpen(false);
+                        setShowReorderModal(true);
                       }}
-                      className={`w-full text-right px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-400/10 text-amber-300 font-bold border border-amber-400/20'
-                          : 'text-slate-300 hover:bg-slate-800'
-                      }`}
+                      className="text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer text-[10px]"
                     >
-                      <span className="truncate flex items-center gap-1.5">
-                        {!unlocked && !isTeacherMode && <Lock className="w-3 h-3 text-slate-500 shrink-0" />}
-                        <span className="truncate">{c.shortTitle || c.title}</span>
-                      </span>
-                      {isSelected && <span className="text-[10px] text-amber-400">مختارة</span>}
+                      <ArrowUpDown className="w-3 h-3" />
+                      <span>تعديل الترتيب</span>
                     </button>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+
+                  {coursesList.map((c, idx) => {
+                    const unlocked = isCourseUnlocked(c.id, isTeacherMode, c);
+                    const isSelected = c.id === activeCourseId;
+                    return (
+                      <div
+                        key={c.id}
+                        className={`w-full px-2 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between group ${
+                          isSelected
+                            ? 'bg-amber-400/10 text-amber-300 font-bold border border-amber-400/20'
+                            : 'text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <button
+                          onClick={() => {
+                            onSelectCourse(c.id);
+                            setCoursesDropdownOpen(false);
+                          }}
+                          className="flex-1 text-right truncate flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span className="font-mono text-[10px] text-slate-500 w-4">{idx + 1}.</span>
+                          {!unlocked && !isTeacherMode && <Lock className="w-3 h-3 text-slate-500 shrink-0" />}
+                          <span className="truncate">{c.shortTitle || c.title}</span>
+                        </button>
+
+                        {/* Quick Up / Down Arrows inside Dropdown */}
+                        <div className="flex items-center gap-0.5 shrink-0 opacity-80 group-hover:opacity-100">
+                          <button
+                            onClick={(e) => handleMoveCourse(c.id, 'up', e)}
+                            disabled={idx === 0}
+                            className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                            title="تحريك لأعلى"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => handleMoveCourse(c.id, 'down', e)}
+                            disabled={idx === coursesList.length - 1}
+                            className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                            title="تحريك لأسفل"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Reorder Modal Button */}
+            <button
+              onClick={() => setShowReorderModal(true)}
+              className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer shrink-0"
+              title="تخصيص ترتيب الحقائب في القائمة الجانبية والمنصة"
+            >
+              <ArrowUpDown className="w-4 h-4" />
+            </button>
           </div>
+
+          {/* Quick Success Toast */}
+          {reorderSuccessMsg && (
+            <div className="text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-1 rounded-lg text-center animate-fadeIn flex items-center justify-center gap-1">
+              <Check className="w-3 h-3" />
+              <span>{reorderSuccessMsg}</span>
+            </div>
+          )}
         </div>
 
         {/* Scrollable Navigation List */}
         <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin">
           
-          {/* Section 1: Main Curriculum */}
+          {/* Section 0: Courses Navigation & Ordering Section */}
           <div className="space-y-1">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 px-2 py-1">
+              <span className="flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-amber-400" />
+                <span>الحقائب المقررة (الترتيب والانتقال)</span>
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowReorderModal(true)}
+                  className="text-[10px] text-amber-400 hover:text-amber-300 cursor-pointer"
+                  title="فتح نافذة إعادة الترتيب الشاملة"
+                >
+                  ترتيب
+                </button>
+                <button
+                  onClick={() => setCoursesSectionExpanded(!coursesSectionExpanded)}
+                  className="p-1 text-slate-400 hover:text-slate-200 rounded cursor-pointer"
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${coursesSectionExpanded ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {coursesSectionExpanded && (
+              <div className="space-y-1 my-1">
+                {coursesList.map((c, idx) => {
+                  const isSelected = c.id === activeCourseId;
+                  const unlocked = isCourseUnlocked(c.id, isTeacherMode, c);
+
+                  return (
+                    <div
+                      key={c.id}
+                      className={`w-full px-2.5 py-1.5 rounded-xl text-xs transition-colors flex items-center justify-between gap-1 group ${
+                        isSelected
+                          ? 'bg-amber-400/10 text-amber-300 font-bold border border-amber-400/30'
+                          : 'text-slate-300 hover:bg-slate-800/70 border border-transparent'
+                      }`}
+                    >
+                      {/* Course Switch Button */}
+                      <button
+                        onClick={() => {
+                          onSelectCourse(c.id);
+                          if (window.innerWidth < 1024) onClose();
+                        }}
+                        className="flex-1 text-right truncate flex items-center gap-2 cursor-pointer"
+                        title={c.title}
+                      >
+                        <span className="font-mono text-[10px] w-4 text-slate-400 shrink-0">{idx + 1}.</span>
+                        {!unlocked && !isTeacherMode && (
+                          <Lock className="w-3 h-3 text-slate-500 shrink-0" />
+                        )}
+                        <span className="truncate">{c.shortTitle || c.title}</span>
+                      </button>
+
+                      {/* Reorder Arrows (Move Up / Move Down) */}
+                      <div className="flex items-center gap-0.5 shrink-0 opacity-70 group-hover:opacity-100">
+                        <button
+                          onClick={(e) => handleMoveCourse(c.id, 'up', e)}
+                          disabled={idx === 0}
+                          className="p-1 hover:bg-slate-700/80 rounded text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                          title="تقديم الحقيبة في الترتيب (لأعلى)"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => handleMoveCourse(c.id, 'down', e)}
+                          disabled={idx === coursesList.length - 1}
+                          className="p-1 hover:bg-slate-700/80 rounded text-slate-400 hover:text-white disabled:opacity-20 cursor-pointer"
+                          title="تأخير الحقيبة في الترتيب (لأسفل)"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Section 1: Main Curriculum */}
+          <div className="space-y-1 pt-2 border-t border-slate-800/60">
             <div className="text-[11px] font-bold text-slate-400 px-2 py-1 flex items-center justify-between">
               <span>المسار التعليمي والدروس</span>
             </div>
+
+            {/* Presentation Mode Button */}
+            {onOpenPresentationMode && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenPresentationMode();
+                }}
+                className="w-full text-right px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2.5 cursor-pointer bg-gradient-to-r from-amber-500/20 to-emerald-500/20 hover:from-amber-500/30 hover:to-emerald-500/30 text-amber-300 border border-amber-500/40 shadow-xs mb-1"
+                title="عرض محتوى الدرس كعرض تقديمي تفاعلي مع أدوات قلم للرسم على الشاشة"
+              >
+                <Monitor className="w-4 h-4 text-amber-400" />
+                <span className="flex-1">وضع العرض التقديمي (بريزنتيشن)</span>
+                <span className="text-[10px] bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded font-bold font-quran">شرح</span>
+              </button>
+            )}
 
             {/* Cover Tab */}
             <button
@@ -486,6 +697,137 @@ export const CourseSidebar: React.FC<CourseSidebarProps> = ({
         </div>
 
       </aside>
+
+      {/* Course Reordering Modal Dialog */}
+      {showReorderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn font-tajawal dir-rtl">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full p-6 text-slate-100 shadow-2xl space-y-5 animate-scaleUp">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400">
+                  <ArrowUpDown className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold font-quran text-amber-300">
+                    التحكم في ترتيب الحقائب التعليمية
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    حدّد الترتيب المناسب لعرض الحقائب في القائمة الجانبية والمنصة
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowReorderModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-slate-400">أنماط ترتيب سريعة موصى بها:</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleSetPresetOrder('foundational_first')}
+                  className="px-3 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-700/60 text-emerald-300 text-xs font-bold text-right cursor-pointer flex items-center gap-2 transition-colors"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="truncate">أصول التلاوة والتأسيس أولاً</span>
+                </button>
+
+                <button
+                  onClick={() => handleSetPresetOrder('makharij_progression')}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-bold text-right cursor-pointer flex items-center gap-2 transition-colors"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="truncate">المخارج والصفات تالياً</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Draggable / Reorderable List of Courses */}
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
+              <div className="text-[11px] font-bold text-slate-400">اسحب أو انقر على الأسهم لتغيير الترتيب:</div>
+
+              {coursesList.map((c, idx) => {
+                const isSelected = c.id === activeCourseId;
+                const isFirst = idx === 0;
+                const isLast = idx === coursesList.length - 1;
+
+                return (
+                  <div
+                    key={c.id}
+                    className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'bg-amber-400/10 border-amber-400/40 shadow-sm'
+                        : 'bg-slate-800/60 border-slate-700/70 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-6 h-6 rounded-full bg-slate-700/80 font-mono text-xs font-bold flex items-center justify-center text-amber-400 shrink-0">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold font-quran text-slate-100 truncate">
+                          {c.title}
+                        </div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                          <span>{c.levelText || 'مقرر دراسي'}</span>
+                          {isSelected && (
+                            <span className="text-amber-400 font-bold">الحقيبة المفتوحة حالياً</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Up & Down Buttons */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => handleMoveCourse(c.id, 'up', e)}
+                        disabled={isFirst}
+                        className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                        title="تقديم لأعلى"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={(e) => handleMoveCourse(c.id, 'down', e)}
+                        disabled={isLast}
+                        className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                        title="تأخير لأسفل"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+              <button
+                onClick={() => handleSetPresetOrder('default')}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                <span>إعادة ضبط الترتيب</span>
+              </button>
+
+              <button
+                onClick={() => setShowReorderModal(false)}
+                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs cursor-pointer shadow-md transition-colors"
+              >
+                حفظ وإغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

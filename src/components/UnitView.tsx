@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Unit, Lesson, Course } from '../types';
 import { MindMapView } from './MindMapView';
 import { DiagramTreeRenderer } from './DiagramTreeRenderer';
+import { PresentationModeView } from './PresentationModeView';
 import { 
   BookOpen, Sparkles, CheckCircle2, HelpCircle, FileText, Layers, 
   ArrowRight, ArrowLeft, RotateCcw, Award, UserCheck, GitBranch, 
   ChevronDown, ChevronUp, Target, Eye, EyeOff, Lightbulb, Edit3, FolderSync,
   Play, Video, ExternalLink, X, PlusCircle, Maximize2, Minimize2, AlertCircle, Heart,
-  Type, AlignJustify
+  Type, AlignJustify, Monitor
 } from 'lucide-react';
 import { saveSubmission } from '../utils/studentStorage';
 import { getUnitQuizQuestions, subscribeQuestionBank, UnitQuizQuestion } from '../utils/questionStorage';
@@ -205,6 +206,7 @@ export const UnitView: React.FC<UnitViewProps> = ({
   const [showClassifierModal, setShowClassifierModal] = useState<boolean>(false);
   const [showTeacherGuide, setShowTeacherGuide] = useState<boolean>(false);
   const [favoriteToast, setFavoriteToast] = useState<string | null>(null);
+  const [showPresentationMode, setShowPresentationMode] = useState<boolean>(false);
 
   // Focus Mode State & Reading Typography Scaling (Font size + Line spacing)
   const [internalFocusMode, setInternalFocusMode] = useState<boolean>(false);
@@ -286,7 +288,7 @@ export const UnitView: React.FC<UnitViewProps> = ({
   const isTeacherGuideActive = isTeacherMode || showTeacherGuide;
 
   // Store quiz answers and submission states per course and unit number to keep them strictly isolated
-  const courseId = course?.id || 'sakinan';
+  const courseId = course?.id || 'foundational_rules';
   const unitKey = `${courseId}_u${unit.unitNumber}`;
 
   const [allUnitsAnswers, setAllUnitsAnswers] = useState<Record<string, Record<number, number>>>(() => {
@@ -612,6 +614,16 @@ export const UnitView: React.FC<UnitViewProps> = ({
               </div>
             </div>
 
+            {/* Presentation Mode Button in Focus Bar */}
+            <button
+              onClick={() => setShowPresentationMode(true)}
+              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="تفعيل وضع العرض التقديمي مع قلم الشرح التفاعلي"
+            >
+              <Monitor className="w-3.5 h-3.5 text-amber-400" />
+              <span>عرض تقديمي</span>
+            </button>
+
             {/* Exit Focus Mode Button */}
             <button
               onClick={handleToggleFocus}
@@ -710,10 +722,20 @@ export const UnitView: React.FC<UnitViewProps> = ({
               <span>الاختبار والمراجعة</span>
             </button>
 
+            {/* Presentation Mode Button in Lesson Tab Bar */}
+            <button
+              onClick={() => setShowPresentationMode(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-amber-500/20 to-emerald-500/20 hover:from-amber-500/30 hover:to-emerald-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 shadow-xs mr-auto"
+              title="عرض محتوى الدرس كعرض تقديمي تفاعلي مع أدوات قلم للرسم على الشاشة لمعاهد القراءات"
+            >
+              <Monitor className="w-3.5 h-3.5 text-amber-400" />
+              <span>العرض التقديمي (بريزنتيشن)</span>
+            </button>
+
             {/* Focus Mode Button in Lesson Tab Bar */}
             <button
               onClick={handleToggleFocus}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer text-emerald-300 hover:text-emerald-100 hover:bg-emerald-950/60 border border-emerald-800/80 mr-auto"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer text-emerald-300 hover:text-emerald-100 hover:bg-emerald-950/60 border border-emerald-800/80"
               title="تفعيل وضع القراءة المركزة وإخفاء جميع المشتتات"
             >
               <Eye className="w-3.5 h-3.5 text-emerald-400" />
@@ -1749,6 +1771,17 @@ export const UnitView: React.FC<UnitViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Interactive Fullscreen Presentation Mode with Drawing & Annotation Tools for Recitation Institutes */}
+      {showPresentationMode && (
+        <PresentationModeView
+          course={course || ALL_COURSES.find(c => c.units?.some(u => u.id === unit.id)) || ALL_COURSES[0]}
+          unit={unit}
+          initialLessonIndex={activeLessonIndex}
+          onClose={() => setShowPresentationMode(false)}
+          isTeacherMode={isTeacherMode}
+        />
       )}
     </div>
   );

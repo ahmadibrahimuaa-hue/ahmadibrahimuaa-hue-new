@@ -212,7 +212,7 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
   };
 
   const selectedLockedCourse = courses.find((c) => c.id === lockedCourseModal);
-  const isSakinanDone = isCoursePassed('sakinan');
+  const isFoundationalDone = isCoursePassed('foundational_rules');
 
   // Filter courses by level if a specific level is selected
   const filteredCourses = useMemo(() => {
@@ -865,15 +865,15 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
                     <p className="text-slate-400">يمكنك معاينة تفاصيل محاور الحقيبة، والتواصل مع المعلم للاشتراك.</p>
                   </div>
                 </div>
-              ) : selectedLockedCourse.id === 'idgham' ? (
+              ) : selectedLockedCourse.id === 'idgham' || selectedLockedCourse.id === 'makharij' ? (
                 <div className="space-y-2">
                   <p>
-                    طبقاً للمنهاج التعليمي، تُفتح هذه الحقيبة تلقائياً بعد <strong>إتمام ودراسة الحقائب التأسيسية الأولى</strong> واجتياز الاختبار النهائي بنسبة <strong>90% فأكثر</strong> أو بإذن المعلم المباشر.
+                    تتاح هذه الحقيبة ضمن منهاج <strong>دروس التجويد</strong>. يمكنك البدء فيها ومتابعة دروسها، أو طلب اعتماد المعلم المباشر.
                   </p>
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                    <span>حالة دراسة الحقائب التأسيسية:</span>
-                    <span className={(isCoursePassed('foundational_rules') || isSakinanDone) ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-                      {(isCoursePassed('foundational_rules') || isSakinanDone) ? 'تم الاجتياز بنجاح ✓' : 'لم يتم اجتياز الاختبار بعد'}
+                    <span>حالة دراسة الحقيبة التأسيسية:</span>
+                    <span className={isFoundationalDone ? 'text-emerald-400 font-bold' : 'text-slate-400 font-normal'}>
+                      {isFoundationalDone ? 'تم الاجتياز بنجاح ✓' : 'متاحة للبدء الآن'}
                     </span>
                   </div>
                 </div>

@@ -2,7 +2,7 @@ import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getStudentProfile, clearStudentProfile, clearAllSubmissions } from './studentStorage';
 import { Course } from '../types';
-import { getCourseById } from '../data/courses';
+import { getCourseById, getAllCourses } from '../data/courses';
 import { getCourseBadges, notifyBadgeUnlocked } from './badgeSystem';
 import { getExplicitStudentCourseAccess } from './studentAccessStorage';
 
@@ -36,8 +36,11 @@ export const getDefaultSingleProgress = (): SingleCourseProgress => ({
 
 let currentMultiProgress: MultiCourseProgressData = {
   courses: {
+    foundational_rules: getDefaultSingleProgress(),
     sakinan: getDefaultSingleProgress(),
     idgham: getDefaultSingleProgress(),
+    makharij: getDefaultSingleProgress(),
+    ijazah: getDefaultSingleProgress(),
   },
   lastUpdated: Date.now(),
 };
@@ -167,7 +170,7 @@ export const markUnitCompleted = async (unitNumber: number, completed: boolean =
   }
 };
 
-export const markSectionRead = async (sectionId: string, courseId: string = 'sakinan') => {
+export const markSectionRead = async (sectionId: string, courseId: string = 'foundational_rules') => {
   const multi = { ...loadMultiProgress() };
   const prog = { ...getStudentProgress(courseId) };
 
@@ -183,7 +186,7 @@ export const markSectionRead = async (sectionId: string, courseId: string = 'sak
   await syncProgressToFirestore(courseId, prog);
 };
 
-export const recordExamScore = async (scorePercentage: number, courseId: string = 'sakinan') => {
+export const recordExamScore = async (scorePercentage: number, courseId: string = 'foundational_rules') => {
   const multi = { ...loadMultiProgress() };
   const prog = { ...getStudentProgress(courseId) };
 
@@ -214,9 +217,79 @@ export const recordExamScore = async (scorePercentage: number, courseId: string 
   }
 };
 
-export const isCoursePassed = (courseId: string = 'sakinan'): boolean => {
+export const isCoursePassed = (courseId: string = 'foundational_rules'): boolean => {
   const prog = getStudentProgress(courseId);
   return Boolean(prog.examCompleted && prog.examBestScore !== null && prog.examBestScore >= 90);
+};
+
+const OPENED_COURSES_KEY = 'tajweed_student_opened_courses_v1';
+
+export const markCourseOpened = (courseId: string): void => {
+  if (typeof window === 'undefined' || !courseId) return;
+  try {
+    const raw = localStorage.getItem(OPENED_COURSES_KEY);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.includes(courseId)) {
+      list.push(courseId);
+      localStorage.setItem(OPENED_COURSES_KEY, JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent('tajweed_opened_courses_updated', { detail: list }));
+    }
+  } catch (e) {
+    console.warn('Error saving opened course:', e);
+  }
+};
+
+export const recordCourseOpened = markCourseOpened;
+
+export const getOpenedCourseIds = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(OPENED_COURSES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const isCourseStudied = (courseId: string, prog?: SingleCourseProgress): boolean => {
+  const p = prog || getStudentProgress(courseId);
+  if (!p) return false;
+  return (
+    Boolean(p.completedUnitNumbers && p.completedUnitNumbers.length > 0) ||
+    Boolean(p.readSections && p.readSections.length > 0) ||
+    Boolean(p.examCompleted) ||
+    Boolean(p.examBestScore !== null && p.examBestScore > 0) ||
+    Boolean(p.totalQuizzesPassed !== undefined && p.totalQuizzesPassed > 0)
+  );
+};
+
+export const getStrictlyStudiedCourses = (fallbackActiveId?: string): Course[] => {
+  const all = getAllCourses();
+  const multi = loadMultiProgress();
+  const studied = all.filter((c) => isCourseStudied(c.id, multi.courses[c.id]));
+  if (studied.length > 0) return studied;
+  const fallback = all.find((c) => c.id === fallbackActiveId) || all[0];
+  return fallback ? [fallback] : [];
+};
+
+/**
+ * Returns strictly the courses the student has ACTUALLY studied (has progress).
+ * If no course has been studied yet, falls back strictly to the activeCourseId.
+ */
+export const getStudentStudiedCourses = (activeCourseId?: string): Course[] => {
+  const all = getAllCourses();
+  const multi = loadMultiProgress();
+
+  // Filter strictly by actual study progress (units, sections, quizzes, exam)
+  const studied = all.filter((c) => isCourseStudied(c.id, multi.courses[c.id]));
+
+  if (studied.length > 0) {
+    return studied;
+  }
+
+  // Fallback strictly to current course if student has not studied any course yet
+  const fallback = all.find((c) => c.id === activeCourseId) || all[0];
+  return fallback ? [fallback] : [];
 };
 
 const UNLOCKED_COURSES_KEY = 'tajweed_unlocked_courses_list';
@@ -260,59 +333,36 @@ export interface CourseLockStatus {
   isExplicitTeacherAction: boolean;
 }
 
+export type CourseLockInfo = CourseLockStatus;
+
+export interface CourseTimelineItem {
+  id: string;
+  unitIndex: number;
+  unitNumber: number;
+  lessonIndex: number;
+  lessonNumber: number;
+  lessonTitle: string;
+  unitTitle: string;
+  isCompleted: boolean;
+  completedAt?: number;
+  isCurrentNext: boolean;
+  isLocked: boolean;
+}
+
 export const getCourseLockDetails = (
-  courseId: string,
+  courseId: string, 
   isTeacherMode: boolean = false,
   courseObj?: Course
-): CourseLockStatus => {
+): CourseLockInfo => {
+  // 1. In teacher mode, always allow full preview and inspection
   if (isTeacherMode) {
     return {
       isUnlocked: true,
       statusType: 'teacher_unlocked',
-      badgeText: 'مفتوحة (وضع المعلم)',
-      badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50',
-      explanation: 'وضع المعلم يتيح الوصول الكامل لكافة الحقائب.',
+      badgeText: 'معاينة المعلم 👁️',
+      badgeClass: 'bg-indigo-950/90 text-indigo-300 border-indigo-400',
+      explanation: 'أنت في وضع المعلم ولديك صلاحية معاينة وإدارة الحقيبة.',
       isExplicitTeacherAction: false,
-    };
-  }
-
-  const profile = getStudentProfile();
-  const studentName = profile?.name?.trim();
-
-  // 1. Check explicit per-student grant/lock from teacher
-  if (studentName) {
-    const explicit = getExplicitStudentCourseAccess(studentName, courseId);
-    if (explicit === true) {
-      return {
-        isUnlocked: true,
-        statusType: 'teacher_unlocked',
-        badgeText: 'مفتوحة بقرار المعلم 🔑',
-        badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-400 font-bold',
-        explanation: `تم منحك صلاحية فتح هذه الحقيبة خصيصاً من قِبل المعلم يا ${studentName}.`,
-        isExplicitTeacherAction: true,
-      };
-    } else if (explicit === false) {
-      return {
-        isUnlocked: false,
-        statusType: 'teacher_locked',
-        badgeText: 'مقفلة من قِبل المعلم 🔒',
-        badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
-        explanation: `تم تقييد الوصول لهذه الحقيبة من قِبل المعلم مؤقتاً. يمكنك طلب الفتح عبر واتساب.`,
-        isExplicitTeacherAction: true,
-      };
-    }
-  }
-
-  // 2. Check device-level unlock list
-  const explicitlyUnlocked = getStudentUnlockedCourses();
-  if (explicitlyUnlocked.includes(courseId)) {
-    return {
-      isUnlocked: true,
-      statusType: 'teacher_unlocked',
-      badgeText: 'مفتوحة ومصرح بها 🔑',
-      badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-400',
-      explanation: 'تم فتح هذه الحقيبة على هذا الجهاز.',
-      isExplicitTeacherAction: true,
     };
   }
 
@@ -328,6 +378,18 @@ export const getCourseLockDetails = (
     };
   }
 
+  // 2. ABSOLUTE SYSTEM LOCK: If course status is locked or coming_soon, it is locked for ALL students across platform
+  if (course.status === 'locked') {
+    return {
+      isUnlocked: false,
+      statusType: 'teacher_locked',
+      badgeText: 'مقفلة من المعلم 🔒',
+      badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
+      explanation: 'هذه الحقيبة مقفلة من المعلم عبر لوحة التحكم.',
+      isExplicitTeacherAction: true,
+    };
+  }
+
   if (course.status === 'coming_soon') {
     return {
       isUnlocked: false,
@@ -339,73 +401,62 @@ export const getCourseLockDetails = (
     };
   }
 
-  if (course.status === 'locked') {
-    return {
-      isUnlocked: false,
-      statusType: 'teacher_locked',
-      badgeText: 'مقفلة من المعلم 🔒',
-      badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
-      explanation: 'هذه الحقيبة مقفلة من المعلم، تواصل لطلب فتحها.',
-      isExplicitTeacherAction: true,
-    };
-  }
-
-  if (course.pricing?.isPaid) {
-    return {
-      isUnlocked: false,
-      statusType: 'paid_locked',
-      badgeText: `${course.pricing.priceText || 'محتوى مدفوع'} 🔒`,
-      badgeClass: 'bg-amber-950/90 text-amber-300 border-amber-500',
-      explanation: 'هذه الحقيبة تتطلب اشتراكاً أو إذن المعلم المباشر.',
-      isExplicitTeacherAction: false,
-    };
-  }
-
-  if (courseId === 'foundational_rules') {
-    return {
-      isUnlocked: true,
-      statusType: 'default_unlocked',
-      badgeText: 'الحقيبة التأسيسية الأولى (مفتوحة تلقائياً) 🟢',
-      badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-500',
-      explanation: 'الحقيبة التأسيسية الأولى (أصول التلاوة) مفتوحة لجميع الطلاب تلقائياً.',
-      isExplicitTeacherAction: false,
-    };
-  }
-
-  if (courseId === 'sakinan') {
-    return {
-      isUnlocked: true,
-      statusType: 'default_unlocked',
-      badgeText: 'مفتوحة ومتاحة للجميع 🟢',
-      badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-500',
-      explanation: 'حقيبة قواعد التقاء الساكنين مفتوحة ومتاحة للجميع.',
-      isExplicitTeacherAction: false,
-    };
-  }
-
-  if (courseId === 'idgham') {
-    const sakinanPassed = isCoursePassed('sakinan');
-    if (sakinanPassed) {
-      return {
-        isUnlocked: true,
-        statusType: 'passed_prerequisite',
-        badgeText: 'مفتوحة (تم اجتياز الأولى) ✨',
-        badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-400',
-        explanation: 'فُتحت تلقائياً لاجتيازك الحقيبة السابقة بنسبة تفوق 90%.',
-        isExplicitTeacherAction: false,
-      };
-    } else {
+  // 3. STUDENT-SPECIFIC OVERRIDE (From StudentAccessManagementPanel)
+  const profile = getStudentProfile();
+  const studentName = profile?.name?.trim();
+  if (studentName) {
+    const explicit = getExplicitStudentCourseAccess(studentName, courseId);
+    if (explicit === false) {
       return {
         isUnlocked: false,
-        statusType: 'locked_prerequisite',
-        badgeText: 'مقفلة (تتطلب اجتياز الأولى) 🔒',
+        statusType: 'teacher_locked',
+        badgeText: 'مقفلة من قِبل المعلم 🔒',
+        badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
+        explanation: `تم تقييد الوصول لهذه الحقيبة من قِبل المعلم مؤقتاً يا ${studentName}.`,
+        isExplicitTeacherAction: true,
+      };
+    } else if (explicit === true) {
+      return {
+        isUnlocked: true,
+        statusType: 'teacher_unlocked',
+        badgeText: 'مفتوحة بقرار المعلم 🔑',
+        badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-400 font-bold',
+        explanation: `تم منحك صلاحية فتح هذه الحقيبة خصيصاً من قِبل المعلم يا ${studentName}.`,
+        isExplicitTeacherAction: true,
+      };
+    }
+  }
+
+  // 4. PAID / RESTRICTED CONTENT
+  if (course.pricing?.isPaid) {
+    const explicitlyUnlocked = getStudentUnlockedCourses();
+    const isGranted = explicitlyUnlocked.includes(courseId);
+    if (!isGranted) {
+      return {
+        isUnlocked: false,
+        statusType: 'paid_locked',
+        badgeText: `${course.pricing.priceText || 'محتوى مدفوع'} 🔒`,
         badgeClass: 'bg-amber-950/90 text-amber-300 border-amber-500',
-        explanation: 'تُفتح تلقائياً عند اجتياز حقيبة التقاء الساكنين بنسبة 90%، أو بإذن المعلم المباشر.',
+        explanation: 'هذه الحقيبة تتطلب اشتراكاً أو إذن المعلم المباشر.',
         isExplicitTeacherAction: false,
       };
     }
   }
 
+  // 5. DEVICE LEVEL UNLOCK LIST (For courses that are paid/special)
+  const explicitlyUnlocked = getStudentUnlockedCourses();
+  if (explicitlyUnlocked.includes(courseId)) {
+    return {
+      isUnlocked: true,
+      statusType: 'teacher_unlocked',
+      badgeText: 'مفتوحة ومصرح بها 🔑',
+      badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-400',
+      explanation: 'تم فتح هذه الحقيبة على هذا الجهاز.',
+      isExplicitTeacherAction: true,
+    };
+  }
+
+  // 6. DEFAULT FOR ACTIVE AVAILABLE COURSES
   const isAvail = course.status === 'available' && !course.pricing?.isPaid;
   return {
     isUnlocked: isAvail,
@@ -415,6 +466,46 @@ export const getCourseLockDetails = (
     explanation: isAvail ? 'الحقيبة متاحة للدراسة.' : 'الحقيبة مقفلة وتحتاج إذن المعلم.',
     isExplicitTeacherAction: !isAvail,
   };
+};
+
+/**
+ * Generates an ordered chronological timeline of all lessons for the learning journey
+ */
+export const getCourseLessonsTimeline = (
+  course: Course,
+  prog: SingleCourseProgress,
+  isUnlocked: boolean = true
+): CourseTimelineItem[] => {
+  const items: CourseTimelineItem[] = [];
+  const completedUnits = new Set(prog.completedUnitNumbers || []);
+  let foundFirstIncomplete = false;
+
+  (course.units || []).forEach((unit, unitIdx) => {
+    const isUnitDone = completedUnits.has(unit.unitNumber);
+    (unit.lessons || []).forEach((lesson, lessonIdx) => {
+      const isCompleted = isUnitDone;
+      const isCurrentNext = !isCompleted && !foundFirstIncomplete && isUnlocked;
+      if (isCurrentNext) {
+        foundFirstIncomplete = true;
+      }
+
+      items.push({
+        id: `u${unit.unitNumber}_l${lesson.lessonNumber}`,
+        unitIndex: unitIdx,
+        unitNumber: unit.unitNumber,
+        lessonIndex: lessonIdx,
+        lessonNumber: lesson.lessonNumber,
+        lessonTitle: lesson.title,
+        unitTitle: unit.title,
+        isCompleted,
+        completedAt: isCompleted ? prog.lastUpdated : undefined,
+        isCurrentNext,
+        isLocked: !isUnlocked,
+      });
+    });
+  });
+
+  return items;
 };
 
 export const isCourseUnlocked = (
@@ -470,11 +561,28 @@ export const getBadges = (prog: SingleCourseProgress = getStudentProgress('found
 
 export const resetProgress = async (courseId?: string) => {
   const profile = getStudentProfile();
+  const allCourses = getAllCourses();
   
   if (courseId) {
     currentMultiProgress.courses[courseId] = getDefaultSingleProgress();
     currentMultiProgress.lastUpdated = Date.now();
     saveProgressLocally(currentMultiProgress);
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(OPENED_COURSES_KEY);
+        if (raw) {
+          const list: string[] = JSON.parse(raw);
+          const filtered = list.filter((id) => id !== courseId);
+          localStorage.setItem(OPENED_COURSES_KEY, JSON.stringify(filtered));
+        }
+        localStorage.removeItem(`tajweed_exam_saved_result_${courseId}`);
+        localStorage.removeItem(`tajweed_exam_result_${courseId}`);
+        localStorage.removeItem(`tajweed_quiz_answers_${courseId}`);
+      } catch (e) {
+        console.warn('Reset course storage error:', e);
+      }
+    }
 
     if (profile && profile.name) {
       try {
@@ -484,45 +592,50 @@ export const resetProgress = async (courseId?: string) => {
       }
     }
   } else {
+    // Reset all courses across platform
+    const newCourses: Record<string, SingleCourseProgress> = {};
+    allCourses.forEach((c) => {
+      newCourses[c.id] = getDefaultSingleProgress();
+    });
     currentMultiProgress = {
-      courses: {
-        sakinan: getDefaultSingleProgress(),
-        idgham: getDefaultSingleProgress(),
-      },
+      courses: newCourses,
       lastUpdated: Date.now(),
     };
 
     saveProgressLocally(currentMultiProgress);
 
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(OPENED_COURSES_KEY);
+        localStorage.removeItem('tajweed_unit_quiz_answers_v3');
+        localStorage.removeItem('tajweed_unit_quiz_submitted_v3');
+        localStorage.removeItem('tajweed_exam_saved_result');
+        localStorage.removeItem('tajweed_student_progress_v1');
+        allCourses.forEach((c) => {
+          localStorage.removeItem(`tajweed_exam_saved_result_${c.id}`);
+          localStorage.removeItem(`tajweed_exam_result_${c.id}`);
+          localStorage.removeItem(`tajweed_quiz_answers_${c.id}`);
+        });
+      } catch (e) {
+        console.warn('localStorage clean error:', e);
+      }
+    }
+
     if (profile && profile.name) {
       try {
-        await deleteDoc(doc(db, 'student_progress', `${profile.name}_sakinan`));
-        await deleteDoc(doc(db, 'student_progress', `${profile.name}_idgham`));
+        for (const c of allCourses) {
+          await deleteDoc(doc(db, 'student_progress', `${profile.name}_${c.id}`));
+        }
         await deleteDoc(doc(db, 'student_progress', profile.name));
       } catch (err) {
         console.warn('Firestore progress doc delete failed:', err);
       }
     }
-
-    await clearStudentProfile();
-    await clearAllSubmissions();
-
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem('tajweed_unit_quiz_answers_v3');
-        localStorage.removeItem('tajweed_unit_quiz_submitted_v3');
-        localStorage.removeItem('tajweed_exam_saved_result');
-        localStorage.removeItem('tajweed_student_profile');
-        localStorage.removeItem('tajweed_student_submissions');
-        localStorage.removeItem('tajweed_student_progress_v1');
-        localStorage.removeItem(PROGRESS_KEY);
-      } catch (e) {
-        console.warn('localStorage clean error:', e);
-      }
-    }
   }
 
+  notifyListeners();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('tajweed_progress_reset'));
+    window.dispatchEvent(new CustomEvent('tajweed_opened_courses_updated', { detail: [] }));
   }
 };

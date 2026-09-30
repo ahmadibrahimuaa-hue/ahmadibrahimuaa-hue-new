@@ -48,7 +48,7 @@ export const StudentAccessManagementPanel: React.FC<StudentAccessManagementPanel
   // Selection state for bulk actions
   const [selectedStudentNames, setSelectedStudentNames] = useState<string[]>([]);
   const [bulkActionCourseId, setBulkActionCourseId] = useState<string>(
-    courses[0]?.id || 'sakinan'
+    courses[0]?.id || 'foundational_rules'
   );
 
   // New Student Quick Add
@@ -295,8 +295,8 @@ export const StudentAccessManagementPanel: React.FC<StudentAccessManagementPanel
     if (!newStudentName.trim()) return;
 
     const clean = newStudentName.trim();
-    // Default open sakinan, lock others
-    await setStudentCourseAccess(clean, 'sakinan', true);
+    // Open foundational rules and all active courses by default
+    await Promise.all(courses.map((c) => setStudentCourseAccess(clean, c.id, true)));
     setNewStudentName('');
     setIsAddingStudent(false);
     showToast(`تمت إضافة الطالب (${clean}) وتجهيز ملف الصلاحيات الخاص به بنجاح!`, 'success');
