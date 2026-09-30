@@ -3,7 +3,7 @@ import {
   UserCheck, ShieldCheck, Award, Trash2, Download, Search, X, 
   CheckCircle2, AlertCircle, FileSpreadsheet, Lock, RefreshCw, Eye, Loader2, Wifi,
   PlusCircle, Edit3, HelpCircle, BookOpen, Layers, Check, RotateCcw, AlertTriangle,
-  Upload, Image as ImageIcon, Palette, Users, Key, Copy, Shield, ExternalLink, Briefcase, BarChart3, FileText
+  Upload, Image as ImageIcon, Palette, Users, Key, Copy, Shield, ExternalLink, Briefcase, BarChart3, FileText, Star
 } from 'lucide-react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -40,6 +40,7 @@ import { TeacherAnalyticsDashboard } from './TeacherAnalyticsDashboard';
 import { TeacherGuidePanel } from './TeacherGuidePanel';
 import { StudentAccessManagementPanel } from './StudentAccessManagementPanel';
 import { InstituteThemeCustomizerPanel } from './InstituteThemeCustomizerPanel';
+import { TeacherSelfReflectionTab } from './TeacherSelfReflectionTab';
 import { ExamDifficultyLevel } from '../types';
 import { getActiveTrainersList } from '../utils/trainerStorage';
 import { subscribeWaitlistEntries, WaitlistEntry } from '../utils/waitlistStorage';
@@ -63,7 +64,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   authTrainer = null,
   authRole = 'trainer',
 }) => {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'submissions' | 'teacher_guide' | 'unit_questions' | 'exam_questions' | 'certificate' | 'trainers' | 'bag_management' | 'waitlist' | 'students_access' | 'institute_themes'>(
+  const [activeTab, setActiveTab] = useState<'analytics' | 'submissions' | 'self_reflections' | 'teacher_guide' | 'unit_questions' | 'exam_questions' | 'certificate' | 'trainers' | 'bag_management' | 'waitlist' | 'students_access' | 'institute_themes'>(
     initialTab
   );
 
@@ -627,6 +628,18 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('self_reflections')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'self_reflections'
+                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
+                  : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40'
+              }`}
+            >
+              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+              <span>⭐ التقييم الذاتي لمدى فهم الطلاب</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('teacher_guide')}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'teacher_guide'
@@ -953,6 +966,13 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
                 </div>
               )}
             </div>
+          )}
+
+          {/* TAB: SELF REFLECTION EVALUATIONS */}
+          {activeTab === 'self_reflections' && (
+            <TeacherSelfReflectionTab
+              activeCourseId={selectedCourseId}
+            />
           )}
 
           {/* TAB 2: UNIT QUIZZES EDITOR */}

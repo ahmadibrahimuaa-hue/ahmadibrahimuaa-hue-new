@@ -4,7 +4,7 @@ import { getStudentProfile, clearStudentProfile, clearAllSubmissions } from './s
 import { Course } from '../types';
 import { getCourseById, getAllCourses } from '../data/courses';
 import { getCourseBadges, notifyBadgeUnlocked } from './badgeSystem';
-import { getExplicitStudentCourseAccess } from './studentAccessStorage';
+import { getExplicitStudentCourseAccess, getBagAccessMode } from './studentAccessStorage';
 
 export interface SingleCourseProgress {
   completedUnitNumbers: number[]; // e.g. [1, 2, 3]
@@ -276,19 +276,25 @@ export const getStrictlyStudiedCourses = (fallbackActiveId?: string): Course[] =
  * Returns strictly the courses the student has ACTUALLY studied (has progress).
  * If no course has been studied yet, falls back strictly to the activeCourseId.
  */
-export const getStudentStudiedCourses = (activeCourseId?: string): Course[] => {
+export const getStudentStudiedCourses = (activeCourseId?: string, excludeLocked: boolean = false): Course[] => {
   const all = getAllCourses();
   const multi = loadMultiProgress();
 
   // Filter strictly by actual study progress (units, sections, quizzes, exam)
-  const studied = all.filter((c) => isCourseStudied(c.id, multi.courses[c.id]));
+  let studied = all.filter((c) => isCourseStudied(c.id, multi.courses[c.id]));
+
+  if (excludeLocked) {
+    studied = studied.filter((c) => c.status !== 'locked');
+  }
 
   if (studied.length > 0) {
     return studied;
   }
 
   // Fallback strictly to current course if student has not studied any course yet
-  const fallback = all.find((c) => c.id === activeCourseId) || all[0];
+  const fallback = all.find((c) => c.id === activeCourseId && (!excludeLocked || c.status !== 'locked')) ||
+                   all.find((c) => !excludeLocked || c.status !== 'locked') ||
+                   all[0];
   return fallback ? [fallback] : [];
 };
 
@@ -354,18 +360,6 @@ export const getCourseLockDetails = (
   isTeacherMode: boolean = false,
   courseObj?: Course
 ): CourseLockInfo => {
-  // 1. In teacher mode, always allow full preview and inspection
-  if (isTeacherMode) {
-    return {
-      isUnlocked: true,
-      statusType: 'teacher_unlocked',
-      badgeText: 'معاينة المعلم 👁️',
-      badgeClass: 'bg-indigo-950/90 text-indigo-300 border-indigo-400',
-      explanation: 'أنت في وضع المعلم ولديك صلاحية معاينة وإدارة الحقيبة.',
-      isExplicitTeacherAction: false,
-    };
-  }
-
   const course = courseObj || getCourseById(courseId);
   if (!course) {
     return {
@@ -378,18 +372,19 @@ export const getCourseLockDetails = (
     };
   }
 
-  // 2. ABSOLUTE SYSTEM LOCK: If course status is locked or coming_soon, it is locked for ALL students across platform
-  if (course.status === 'locked') {
+  // 1. TEACHER MODE: Full preview and management access
+  if (isTeacherMode) {
     return {
-      isUnlocked: false,
-      statusType: 'teacher_locked',
-      badgeText: 'مقفلة من المعلم 🔒',
-      badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
-      explanation: 'هذه الحقيبة مقفلة من المعلم عبر لوحة التحكم.',
-      isExplicitTeacherAction: true,
+      isUnlocked: true,
+      statusType: 'teacher_unlocked',
+      badgeText: 'معاينة المعلم 👁️',
+      badgeClass: 'bg-indigo-950/90 text-indigo-300 border-indigo-400',
+      explanation: 'أنت في وضع المعلم ولديك صلاحية معاينة وإدارة الحقيبة بالكامل.',
+      isExplicitTeacherAction: false,
     };
   }
 
+  // 2. COMING SOON: Pre-launch state
   if (course.status === 'coming_soon') {
     return {
       isUnlocked: false,
@@ -401,7 +396,7 @@ export const getCourseLockDetails = (
     };
   }
 
-  // 3. STUDENT-SPECIFIC OVERRIDE (From StudentAccessManagementPanel)
+  // 3. STUDENT-SPECIFIC GRANULAR OVERRIDE (خليني محدد اكتر افتح ايه واقفل ايه عند مين)
   const profile = getStudentProfile();
   const studentName = profile?.name?.trim();
   if (studentName) {
@@ -410,7 +405,7 @@ export const getCourseLockDetails = (
       return {
         isUnlocked: false,
         statusType: 'teacher_locked',
-        badgeText: 'مقفلة من قِبل المعلم 🔒',
+        badgeText: 'مقفلة بقرار المعلم 🔒',
         badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
         explanation: `تم تقييد الوصول لهذه الحقيبة من قِبل المعلم مؤقتاً يا ${studentName}.`,
         isExplicitTeacherAction: true,
@@ -427,7 +422,34 @@ export const getCourseLockDetails = (
     }
   }
 
-  // 4. PAID / RESTRICTED CONTENT
+  // 4. BAG ACCESS MODE & STATUS CHECK
+  const defaultMode = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
+  const bagMode = getBagAccessMode(courseId, defaultMode);
+
+  if (bagMode === 'all_locked' || course.status === 'locked') {
+    return {
+      isUnlocked: false,
+      statusType: 'teacher_locked',
+      badgeText: 'مقفلة من المعلم 🔒',
+      badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
+      explanation: 'هذه الحقيبة مقفلة في النظام من قِبل المعلم.',
+      isExplicitTeacherAction: true,
+    };
+  }
+
+  if (bagMode === 'selective_locked') {
+    // When bag is selective, only students with explicit grant can access
+    return {
+      isUnlocked: false,
+      statusType: 'teacher_locked',
+      badgeText: 'تتطلب إذن المعلم 🔒',
+      badgeClass: 'bg-amber-950/90 text-amber-300 border-amber-600 font-bold',
+      explanation: 'هذه الحقيبة مخصصة لطلاب محددين وتتطلب إذناً خاصاً من المعلم لفتحها.',
+      isExplicitTeacherAction: true,
+    };
+  }
+
+  // 5. PAID / RESTRICTED CONTENT
   if (course.pricing?.isPaid) {
     const explicitlyUnlocked = getStudentUnlockedCourses();
     const isGranted = explicitlyUnlocked.includes(courseId);
@@ -443,21 +465,8 @@ export const getCourseLockDetails = (
     }
   }
 
-  // 5. DEVICE LEVEL UNLOCK LIST (For courses that are paid/special)
-  const explicitlyUnlocked = getStudentUnlockedCourses();
-  if (explicitlyUnlocked.includes(courseId)) {
-    return {
-      isUnlocked: true,
-      statusType: 'teacher_unlocked',
-      badgeText: 'مفتوحة ومصرح بها 🔑',
-      badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-400',
-      explanation: 'تم فتح هذه الحقيبة على هذا الجهاز.',
-      isExplicitTeacherAction: true,
-    };
-  }
-
   // 6. DEFAULT FOR ACTIVE AVAILABLE COURSES
-  const isAvail = course.status === 'available' && !course.pricing?.isPaid;
+  const isAvail = (course.status || 'available') === 'available';
   return {
     isUnlocked: isAvail,
     statusType: isAvail ? 'default_unlocked' : 'teacher_locked',

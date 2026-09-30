@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Briefcase, PlusCircle, Edit3, Trash2, CheckCircle2, Lock, Unlock,
   Clock, Sparkles, Layers, BookOpen, ChevronLeft, ArrowRight,
   Save, AlertTriangle, RefreshCw, X, Check, DollarSign, Gift,
   Tag, Award, Eye, FileText, ChevronDown, ChevronUp, MoveUp, MoveDown, KeyRound,
   FolderSync, RotateCcw, UserCheck, GripVertical, FolderTree, ArrowDownUp,
-  Search, Filter, CornerDownLeft, ExternalLink, Video, Play
+  Search, Filter, CornerDownLeft, ExternalLink, Video, Play, Users, ShieldCheck,
+  UserX, SlidersHorizontal, UserPlus
 } from 'lucide-react';
 import { Course, Unit, Lesson, CourseStatus, CourseLevel } from '../types';
 import { LessonClassifierModal } from './LessonClassifierModal';
@@ -33,6 +34,23 @@ import {
   revokeCourseAccessFromStudent,
   isCourseUnlocked
 } from '../utils/studentProgressStorage';
+import {
+  getStoredBagAccessModes,
+  getBagAccessMode,
+  setBagAccessMode,
+  BagAccessMode,
+  getStoredStudentAccessMap,
+  setStudentCourseAccess,
+  bulkSetCourseAccessForStudents,
+  getExplicitStudentCourseAccess,
+  DEFAULT_ENROLLED_STUDENTS,
+  StudentCourseAccessMap,
+  subscribeStudentAccess,
+  getStudentEffectiveCourseAccess
+} from '../utils/studentAccessStorage';
+import { getStudentProfile, getSubmissionsList } from '../utils/studentStorage';
+import { getWaitlistEntries } from '../utils/waitlistStorage';
+import { BagStudentAccessModal } from './BagStudentAccessModal';
 
 interface BagManagementPanelProps {
   onClose?: () => void;
@@ -99,6 +117,108 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
 
   // Nesting Modal State
   const [nestingModalCourse, setNestingModalCourse] = useState<Course | null>(null);
+
+  // Granular Student-by-Student Access Modal State (خليني محدد اكتر افتح ايه واقفل ايه عند مين)
+  const [studentAccessModalCourse, setStudentAccessModalCourse] = useState<Course | null>(null);
+  const [accessMap, setAccessMap] = useState<StudentCourseAccessMap>(() => getStoredStudentAccessMap());
+  const [bagModes, setBagModes] = useState<Record<string, BagAccessMode>>(() => getStoredBagAccessModes());
+  const [studentModalSearch, setStudentModalSearch] = useState<string>('');
+  const [studentModalFilter, setStudentModalFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+  const [newStudentNameToAdd, setNewStudentNameToAdd] = useState<string>('');
+  const [newStudentGroupToAdd, setNewStudentGroupToAdd] = useState<string>('حلقة الإتقان');
+  const [showAddStudentForm, setShowAddStudentForm] = useState<boolean>(false);
+
+  useEffect(() => {
+    const unsubAccess = subscribeStudentAccess((map) => {
+      setAccessMap(map);
+    });
+    const handleModes = () => {
+      setBagModes(getStoredBagAccessModes());
+    };
+    window.addEventListener('tajweed_bag_access_modes_updated', handleModes);
+    return () => {
+      unsubAccess();
+      window.removeEventListener('tajweed_bag_access_modes_updated', handleModes);
+    };
+  }, []);
+
+  const allStudentsList = useMemo(() => {
+    const map = new Map<string, { name: string; email?: string; group: string }>();
+    DEFAULT_ENROLLED_STUDENTS.forEach((s) => map.set(s.name.trim(), { name: s.name.trim(), email: s.email, group: s.group }));
+    const profile = getStudentProfile();
+    if (profile?.name && profile.name.trim()) {
+      const pName = profile.name.trim();
+      map.set(pName, { name: pName, email: undefined, group: 'الطالب الحالي المسجل 👤' });
+    }
+    Object.keys(accessMap).forEach((name) => {
+      const clean = name.trim();
+      if (clean && !map.has(clean)) {
+        map.set(clean, { name: clean, email: undefined, group: 'طالب مسجل' });
+      }
+    });
+    getSubmissionsList().forEach((sub) => {
+      if (sub.studentName && sub.studentName.trim()) {
+        const clean = sub.studentName.trim();
+        if (!map.has(clean)) {
+          map.set(clean, { name: clean, email: undefined, group: sub.trainerName ? `حلقة المعلم: ${sub.trainerName}` : 'حلقة عامة' });
+        }
+      }
+    });
+    getWaitlistEntries().forEach((w) => {
+      if (w.studentName && w.studentName.trim()) {
+        const clean = w.studentName.trim();
+        if (!map.has(clean)) {
+          map.set(clean, { name: clean, email: undefined, group: 'قائمة الانتظار' });
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [accessMap]);
+
+  const handleToggleStudentAccessForCourse = async (studentName: string, courseId: string) => {
+    const targetCourse = courses.find((c) => c.id === courseId);
+    const courseStatus = targetCourse?.status || 'available';
+    const effective = getStudentEffectiveCourseAccess(studentName, courseId, courseStatus);
+    const nextVal = !effective.isUnlocked;
+
+    await setStudentCourseAccess(studentName, courseId, nextVal);
+    notifySuccess(
+      nextVal
+        ? `تم فتح الحقيبة خصيصاً للطالب: "${studentName}" 🔑`
+        : `تم قفل الحقيبة عن الطالب: "${studentName}" 🔒`
+    );
+  };
+
+  const handleBatchToggleAllStudentsForCourse = async (courseId: string, shouldUnlock: boolean) => {
+    const names = allStudentsList.map((s) => s.name);
+    await bulkSetCourseAccessForStudents(names, courseId, shouldUnlock);
+    notifySuccess(
+      shouldUnlock
+        ? `تم منح صلاحية فتح الحقيبة لجميع الطلاب (${names.length} طالباً) 🔓`
+        : `تم قفل الحقيبة على جميع الطلاب (${names.length} طالباً) 🔒`
+    );
+  };
+
+  const handleSetCourseMode = (courseId: string, mode: BagAccessMode) => {
+    setBagAccessMode(courseId, mode);
+    setBagModes(getStoredBagAccessModes());
+    notifySuccess(
+      mode === 'all_unlocked'
+        ? 'تم ضبط وضع الحقيبة: مفتوحة لجميع الطلاب تلقائياً 🟢'
+        : mode === 'selective_locked'
+        ? 'تم ضبط وضع الحقيبة: مخصصة لطلاب محددين (مقفلة افتراضياً) 🎯'
+        : 'تم ضبط وضع الحقيبة: مقفلة على جميع الطلاب في المنصة 🔒'
+    );
+  };
+
+  const handleAddNewStudentToCourse = async (courseId: string) => {
+    if (!newStudentNameToAdd.trim()) return;
+    const sName = newStudentNameToAdd.trim();
+    await setStudentCourseAccess(sName, courseId, true);
+    setNewStudentNameToAdd('');
+    setShowAddStudentForm(false);
+    notifySuccess(`تمت إضافة الطالب "${sName}" ومنحه صلاحية فتح الحقيبة بنجاح! 🔑`);
+  };
 
   useEffect(() => {
     const unsub = subscribeCourses((updatedList) => {
@@ -989,33 +1109,74 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
                       </button>
                     </div>
 
-                    {/* Quick Paid & Student Access Control */}
-                    <div className="grid grid-cols-2 gap-2 text-xs font-quran font-bold">
+                    {/* Granular Student-by-Student Access Control (خليني محدد اكتر افتح ايه واقفل ايه عند مين) */}
+                    <div className="space-y-1.5 pt-1">
+                      {/* Access Mode Badge and Customizer Button */}
                       <button
-                        onClick={() => handleQuickPaidToggle(course)}
-                        className={`py-1.5 px-2 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                          isPaid
-                            ? 'bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border-amber-600/50'
-                            : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border-slate-800'
-                        }`}
-                        title="تبديل نوع الحقيبة بين مدفوعة ومجانية"
+                        type="button"
+                        onClick={() => setStudentAccessModalCourse(course)}
+                        className="w-full py-2 px-3 rounded-xl border border-indigo-700/60 bg-gradient-to-r from-indigo-950/80 via-slate-900 to-indigo-950/80 hover:from-indigo-900 hover:to-indigo-900 text-indigo-200 transition-all flex items-center justify-between gap-2 text-xs font-quran font-bold cursor-pointer shadow-xs group"
+                        title="تخصيص صلاحيات الطلاب: تحديد من تفتح له الحقيبة ومن تقفل عنه بالاسم"
                       >
-                        <DollarSign className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{isPaid ? 'مدفوعة 🔒' : 'مجانية 🟢'}</span>
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Users className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span className="truncate">تخصيص صلاحيات الطلاب (افتح واقفل عند مين)</span>
+                        </div>
+
+                        {/* Mode Indicator Badge */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {(() => {
+                            const def = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
+                            const mode = bagModes[course.id] || def;
+                            if (mode === 'all_locked' || course.status === 'locked') {
+                              return (
+                                <span className="bg-rose-950 text-rose-300 text-[10px] px-2 py-0.5 rounded-full border border-rose-800">
+                                  مقفلة للجميع 🔒
+                                </span>
+                              );
+                            }
+                            if (mode === 'selective_locked') {
+                              return (
+                                <span className="bg-amber-950 text-amber-300 text-[10px] px-2 py-0.5 rounded-full border border-amber-700 font-sans">
+                                  مخصصة لطلاب محددين 🎯
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="bg-emerald-950 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full border border-emerald-700">
+                                مفتوحة للجميع 🟢
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </button>
 
-                      <button
-                        onClick={() => handleToggleStudentAccess(course.id, course.title)}
-                        className={`py-1.5 px-2 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                          unlockedStudentCourses.includes(course.id)
-                            ? 'bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 border-emerald-500/50'
-                            : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border-slate-800'
-                        }`}
-                        title="فتح أو قفل صلاحية دخول الطالب في هذا المتصفح"
-                      >
-                        <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{unlockedStudentCourses.includes(course.id) ? 'الوصول ممنوح ✓' : 'مقفلة للطالب 🔒'}</span>
-                      </button>
+                      {/* Quick Paid & Student Access Quick Launcher */}
+                      <div className="grid grid-cols-2 gap-2 text-xs font-quran font-bold">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickPaidToggle(course)}
+                          className={`py-1.5 px-2 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            isPaid
+                              ? 'bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border-amber-600/50'
+                              : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border-slate-800'
+                          }`}
+                          title="تبديل نوع الحقيبة بين مدفوعة ومجانية"
+                        >
+                          <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{isPaid ? 'مدفوعة 🔒' : 'مجانية 🟢'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setStudentAccessModalCourse(course)}
+                          className="py-1.5 px-2 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                          title="تحديد قائمة الطلاب المسموح لهم بدخول هذه الحقيبة"
+                        >
+                          <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                          <span>قائمة الطلاب المصرح لهم 👥</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Nesting Structure Quick Controller */}
@@ -1386,6 +1547,28 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Granular Student Access Button in Edit Form */}
+              <div className="sm:col-span-2 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-indigo-950/70 border border-indigo-700/60 p-4 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 font-bold text-amber-300">
+                    <Users className="w-4 h-4 text-amber-400" />
+                    <span>تخصيص صلاحيات الطلاب لهذه الحقيبة (من تفتح له ومن تقفل عليه)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    حدد ما إذا كانت هذه الحقيبة متاحة لجميع الطلاب تلقائياً أو مخصصة لطلاب محددين بالاسم.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setStudentAccessModalCourse(editingCourse as Course)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-300" />
+                  <span>فتح نافذة تخصيص الطلاب 👥</span>
+                </button>
               </div>
 
               {/* Author & Expected Duration */}
@@ -2196,6 +2379,14 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
           </div>
         </div>
       )}
+
+      {/* Granular Student-by-Student Access Management Modal (خليني محدد اكتر افتح ايه واقفل ايه عند مين) */}
+      <BagStudentAccessModal
+        isOpen={Boolean(studentAccessModalCourse)}
+        onClose={() => setStudentAccessModalCourse(null)}
+        course={studentAccessModalCourse}
+        onNotify={(msg, isErr) => (isErr ? notifyError(msg) : notifySuccess(msg))}
+      />
 
     </div>
   );

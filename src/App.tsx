@@ -106,9 +106,15 @@ export default function App() {
   };
 
   const handleNavigateToLesson = (courseId: string, unitNumber: number, lessonNumber: number) => {
+    const courseObj = getCourseById(courseId) || FOUNDATIONAL_RULES_COURSE;
+    const isUnlocked = isCourseUnlocked(courseId, isTeacherMode, courseObj);
+    if (!isUnlocked && !isTeacherMode) {
+      setActiveCourseId(courseId);
+      setActiveTab('cover');
+      return;
+    }
     setActiveCourseId(courseId);
     setActiveTab('units');
-    const courseObj = getCourseById(courseId) || FOUNDATIONAL_RULES_COURSE;
     const uIdx = courseObj.units?.findIndex((u) => u.unitNumber === unitNumber) ?? -1;
     const targetUnitIndex = uIdx >= 0 ? uIdx : 0;
     setSelectedUnitIndex(targetUnitIndex);
@@ -268,10 +274,14 @@ export default function App() {
       setShowProgressModal(true);
     };
     window.addEventListener('tajweed_unlocked_updated', handleUnlockEvent);
+    window.addEventListener('tajweed_student_access_updated', handleUnlockEvent);
+    window.addEventListener('tajweed_courses_updated', handleUnlockEvent);
     window.addEventListener('tajweed_open_share_achievement', handleOpenShare);
     window.addEventListener('tajweed_open_progress_modal', handleOpenProg);
     return () => {
       window.removeEventListener('tajweed_unlocked_updated', handleUnlockEvent);
+      window.removeEventListener('tajweed_student_access_updated', handleUnlockEvent);
+      window.removeEventListener('tajweed_courses_updated', handleUnlockEvent);
       window.removeEventListener('tajweed_open_share_achievement', handleOpenShare);
       window.removeEventListener('tajweed_open_progress_modal', handleOpenProg);
     };

@@ -18,6 +18,7 @@ import { LessonClassifierModal } from './LessonClassifierModal';
 import { MakharijInteractiveAtlas } from './MakharijInteractiveAtlas';
 import { SifaatVocalSimulator } from './SifaatVocalSimulator';
 import { ALL_COURSES } from '../data/courses';
+import { LessonSelfReflectionCard } from './LessonSelfReflectionCard';
 import { 
   toggleFavoriteLesson, 
   getFavoriteLessons, 
@@ -1316,6 +1317,16 @@ export const UnitView: React.FC<UnitViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Self-Reflection (التقييم الذاتي لمدى استيعاب الدرس) */}
+          <LessonSelfReflectionCard
+            courseId={courseId}
+            unitNumber={unit.unitNumber}
+            unitTitle={unit.title}
+            lessonNumber={currentLesson.lessonNumber}
+            lessonTitle={currentLesson.title}
+            isTeacherMode={isTeacherMode}
+          />
 
           {/* Lesson Navigation Controls */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 font-tajawal">

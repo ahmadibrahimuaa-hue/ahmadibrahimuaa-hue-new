@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { WhatsAppSupport } from './WhatsAppSupport';
 import { isStudentInWaitlist, joinCourseWaitlist } from '../utils/waitlistStorage';
+import { getAllCourses } from '../data/courses';
+import { isCourseUnlocked } from '../utils/studentProgressStorage';
 
 interface LockedCoursePreviewProps {
   course: Course;
@@ -40,17 +42,27 @@ export const LockedCoursePreview: React.FC<LockedCoursePreviewProps> = ({
   const isComingSoon = course.status === 'coming_soon';
   const pricingText = course.pricing?.priceText || (isComingSoon ? 'قريباً - محتوى تدريبي مدفوع ومعتمد' : 'محتوى تخصصي مغلق');
 
+  const handleReturnSafe = () => {
+    const all = getAllCourses();
+    const firstUnlocked = all.find((c) => isCourseUnlocked(c.id, isTeacherMode, c));
+    if (firstUnlocked && firstUnlocked.id !== course.id) {
+      onReturnToActiveCourse(firstUnlocked.id);
+    } else {
+      onReturnToHome();
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn font-tajawal dir-rtl">
       
       {/* Return & Breadcrumb Bar */}
       <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm no-print">
         <button
-          onClick={() => onReturnToActiveCourse('foundational_rules')}
+          onClick={handleReturnSafe}
           className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-300 font-quran transition-colors cursor-pointer"
         >
           <ArrowRight className="w-4 h-4" />
-          <span>العودة للحقيبة المقررة</span>
+          <span>العودة للحقيبة المتاحة</span>
         </button>
 
         <button

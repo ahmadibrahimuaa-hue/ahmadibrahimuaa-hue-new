@@ -35,8 +35,8 @@ export const ShareAchievementModal: React.FC<ShareAchievementModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [selectedBagId, setSelectedBagId] = useState<string>(activeCourseId || 'foundational_rules');
 
-  // Filter only courses the student has opened or studied
-  const studiedCourses: Course[] = getStudentStudiedCourses(activeCourseId);
+  // Filter only courses the student has studied and are currently accessible (exclude locked)
+  const studiedCourses: Course[] = getStudentStudiedCourses(activeCourseId, true);
 
   useEffect(() => {
     if (activeCourseId) {

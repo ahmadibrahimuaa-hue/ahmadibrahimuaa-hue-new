@@ -11,6 +11,37 @@ export interface StudentCourseAccessMap {
 }
 
 const ACCESS_STORAGE_KEY = 'tajweed_student_granular_access_v1';
+const BAG_ACCESS_MODES_KEY = 'tajweed_bag_access_modes_v1';
+
+export type BagAccessMode = 'all_unlocked' | 'selective_locked' | 'all_locked';
+
+export const getStoredBagAccessModes = (): Record<string, BagAccessMode> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(BAG_ACCESS_MODES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+export const getBagAccessMode = (courseId: string, defaultMode: BagAccessMode = 'selective_locked'): BagAccessMode => {
+  const modes = getStoredBagAccessModes();
+  return modes[courseId] || defaultMode;
+};
+
+export const setBagAccessMode = (courseId: string, mode: BagAccessMode): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    const modes = getStoredBagAccessModes();
+    modes[courseId] = mode;
+    localStorage.setItem(BAG_ACCESS_MODES_KEY, JSON.stringify(modes));
+    window.dispatchEvent(new CustomEvent('tajweed_bag_access_modes_updated', { detail: modes }));
+    window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: modes }));
+  } catch (err) {
+    console.error('Failed to save bag access mode:', err);
+  }
+};
 
 // Initial cohort of sample students so the teacher has immediate students to manage
 export const DEFAULT_ENROLLED_STUDENTS = [
@@ -38,6 +69,7 @@ export const saveStoredStudentAccessMap = (map: StudentCourseAccessMap): boolean
   try {
     localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(map));
     window.dispatchEvent(new CustomEvent('tajweed_student_access_updated', { detail: map }));
+    window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: map }));
     return true;
   } catch (err) {
     console.error('Failed to save student access map:', err);
@@ -235,3 +267,38 @@ export const isCourseUnlockedForActiveStudent = (
 
   return fallbackUnlocked;
 };
+
+/**
+ * Returns access status for a student considering both explicit setting and bag mode
+ */
+export const getStudentEffectiveCourseAccess = (
+  studentName: string,
+  courseId: string,
+  courseStatus: string = 'available'
+): { isUnlocked: boolean; reason: 'explicit_grant' | 'explicit_revoke' | 'mode_all_unlocked' | 'mode_selective_locked' | 'mode_all_locked' } => {
+  const explicit = getExplicitStudentCourseAccess(studentName, courseId);
+  const mode = getBagAccessMode(courseId, courseStatus === 'locked' ? 'all_locked' : 'all_unlocked');
+
+  if (mode === 'all_locked') {
+    if (explicit === true) {
+      return { isUnlocked: true, reason: 'explicit_grant' };
+    }
+    return { isUnlocked: false, reason: 'mode_all_locked' };
+  }
+
+  if (explicit === false) {
+    return { isUnlocked: false, reason: 'explicit_revoke' };
+  }
+
+  if (explicit === true) {
+    return { isUnlocked: true, reason: 'explicit_grant' };
+  }
+
+  if (mode === 'all_unlocked') {
+    return { isUnlocked: true, reason: 'mode_all_unlocked' };
+  }
+
+  // selective_locked: locked by default unless granted
+  return { isUnlocked: false, reason: 'mode_selective_locked' };
+};
+

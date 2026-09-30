@@ -19,6 +19,7 @@ import {
 } from '../utils/studentProgressStorage';
 import { getStudentProfile } from '../utils/studentStorage';
 import { getCourseBadges } from '../utils/badgeSystem';
+import { getLessonReflection } from '../utils/selfReflectionStorage';
 import { ShareAchievementModal } from './ShareAchievementModal';
 import { getCourseById } from '../data/courses';
 import { Course } from '../types';
@@ -49,8 +50,8 @@ export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [activeViewMode, setActiveViewMode] = useState<'units' | 'timeline'>('units');
 
-  // Strictly filter only courses the student has ACTUALLY studied
-  const studiedCourses: Course[] = getStudentStudiedCourses(activeCourseId);
+  // Strictly filter only courses the student has ACTUALLY studied (exclude locked for students)
+  const studiedCourses: Course[] = getStudentStudiedCourses(activeCourseId, !isTeacherMode);
 
   useEffect(() => {
     if (activeCourseId) {
@@ -66,7 +67,21 @@ export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({
     };
     refresh();
     const unsubscribe = subscribeStudentProgress(refresh);
-    return () => unsubscribe();
+    
+    // Also listen to system courses and access updates
+    const handleSystemUpdate = () => {
+      refresh();
+    };
+    window.addEventListener('tajweed_courses_updated', handleSystemUpdate);
+    window.addEventListener('tajweed_unlocked_updated', handleSystemUpdate);
+    window.addEventListener('tajweed_student_access_updated', handleSystemUpdate);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('tajweed_courses_updated', handleSystemUpdate);
+      window.removeEventListener('tajweed_unlocked_updated', handleSystemUpdate);
+      window.removeEventListener('tajweed_student_access_updated', handleSystemUpdate);
+    };
   }, []);
 
   if (!isOpen) return null;
@@ -93,6 +108,11 @@ export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({
   const completedLessonsCount = timelineItems.filter(i => i.isCompleted).length;
 
   const handleToggleUnit = async (unitNum: number, currentCompleted: boolean) => {
+    if (!isCourseCurrentlyUnlocked) {
+      setLockWarningMessage(`عذراً، حقيبة "${currentCourseObj?.title}" مقفلة في النظام من قِبل المعلم ولا يمكن تعديل إنجازها.`);
+      setTimeout(() => setLockWarningMessage(null), 3500);
+      return;
+    }
     await markUnitCompleted(unitNum, !currentCompleted, selectedCourseId);
   };
 
@@ -189,16 +209,22 @@ export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({
                   key={crs.id}
                   onClick={() => {
                     setSelectedCourseId(crs.id);
-                    if (onSelectCourse) onSelectCourse(crs.id);
                   }}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold font-quran transition-all shrink-0 cursor-pointer flex items-center gap-1.5 border ${
                     isSelected
                       ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-xs'
+                      : !crsLock.isUnlocked
+                      ? 'bg-rose-950/40 text-rose-300 border-rose-800/60 hover:bg-rose-950/60'
                       : 'bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
                   {!crsLock.isUnlocked && <Lock className="w-3 h-3 text-rose-400 shrink-0" />}
                   <span>{crs.shortTitle || crs.title}</span>
+                  {!crsLock.isUnlocked && (
+                    <span className="text-[9px] bg-rose-900/80 text-rose-200 px-1 py-0.2 rounded font-sans font-bold">
+                      مقفلة
+                    </span>
+                  )}
                   <span className={`text-[10px] font-sans px-1 rounded-sm ${
                     isSelected 
                       ? 'bg-slate-950/20 text-slate-950 font-black' 
@@ -529,6 +555,14 @@ export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({
               {/* Connected Vertical Timeline */}
               <div className="relative pr-6 pl-2 space-y-2.5 before:absolute before:right-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-800">
                 {timelineItems.map((item, idx) => {
+                  const studentProfile = getStudentProfile();
+                  const reflection = getLessonReflection(
+                    studentProfile?.name || 'طالب المنصة', 
+                    selectedCourseId, 
+                    item.unitNumber, 
+                    item.lessonNumber
+                  );
+
                   return (
                     <div 
                       key={item.id} 
@@ -563,12 +597,31 @@ export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({
                           </span>
                         </div>
 
-                        <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 truncate">
+                        <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 truncate flex-wrap">
                           <span>{item.unitTitle}</span>
                           <span aria-hidden="true" className="text-slate-700">·</span>
                           <span className={item.isCompleted ? 'text-emerald-400 font-bold' : item.isCurrentNext ? 'text-amber-400 font-bold' : 'text-slate-500'}>
                             {item.isCompleted ? 'مكتمل تاريخياً ✓' : item.isCurrentNext ? 'الدرس الحالي 🎯' : 'قادم ⏳'}
                           </span>
+                          {reflection && (
+                            <>
+                              <span aria-hidden="true" className="text-slate-700">·</span>
+                              <span 
+                                className="inline-flex items-center gap-1 bg-amber-400/10 border border-amber-400/30 text-amber-300 px-1.5 py-0.5 rounded font-sans font-bold text-[10px]" 
+                                title={reflection.note ? `ملاحظة الطالب: ${reflection.note}` : reflection.ratingLabel}
+                              >
+                                <span>⭐ {reflection.rating}/5</span>
+                                <span className="hidden sm:inline text-[9px] font-quran text-slate-300">
+                                  ({reflection.rating >= 4 ? 'متقن' : reflection.rating >= 3 ? 'متوسط' : 'يحتاج مراجعة'})
+                                </span>
+                              </span>
+                              {reflection.note && (
+                                <span className="hidden md:inline-block text-[9px] text-amber-200/90 bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-800/40 truncate max-w-[160px]" title={reflection.note}>
+                                  💬 "{reflection.note}"
+                                </span>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
 

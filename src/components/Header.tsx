@@ -198,12 +198,19 @@ export const Header: React.FC<HeaderProps> = ({
                             className={`w-full text-right px-2.5 py-1.5 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
                               isSelected
                                 ? 'bg-amber-400/10 text-amber-300 font-bold'
+                                : !unlocked && !isTeacherMode
+                                ? 'text-rose-300/80 hover:bg-slate-800/60'
                                 : 'text-slate-300 hover:bg-slate-800'
                             }`}
                           >
                             <span className="truncate flex items-center gap-1.5">
-                              {!unlocked && !isTeacherMode && <Lock className="w-3 h-3 text-slate-500 shrink-0" />}
+                              {!unlocked && !isTeacherMode && <Lock className="w-3 h-3 text-rose-400 shrink-0" />}
                               <span className="truncate">{c.shortTitle || c.title}</span>
+                              {!unlocked && !isTeacherMode && (
+                                <span className="text-[9px] bg-rose-950 text-rose-300 px-1 py-0.2 rounded border border-rose-800/60">
+                                  مقفلة
+                                </span>
+                              )}
                             </span>
                             {isSelected && <span className="text-[10px] text-amber-400">الحالية</span>}
                           </button>

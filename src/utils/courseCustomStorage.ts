@@ -45,8 +45,8 @@ export const getCustomStoredCourses = (): Course[] => {
       .map((course) => {
         const defaultCourse = DEFAULT_ALL_COURSES.find((c) => c.id === course.id);
         if (defaultCourse) {
-          // Use user's saved status strictly if present, but upgrade coming_soon to available if default is available
-          const status = (course.status && course.status !== 'coming_soon') ? course.status : defaultCourse.status;
+          // Use user's saved status strictly if present without any forced downgrades/upgrades
+          const status = course.status || defaultCourse.status;
           return {
             ...defaultCourse,
             ...course,
@@ -99,9 +99,9 @@ export const getCustomStoredCourses = (): Course[] => {
             pricing: {
               ...defaultCourse.pricing,
               ...course.pricing,
-              isPaid: false,
-              priceText: defaultCourse.pricing?.priceText || 'متاحة مجاناً ومفتوحة بالكامل',
-              note: defaultCourse.pricing?.note || '',
+              isPaid: course.pricing?.isPaid !== undefined ? course.pricing.isPaid : (defaultCourse.pricing?.isPaid ?? false),
+              priceText: course.pricing?.priceText || defaultCourse.pricing?.priceText || 'متاحة مجاناً ومفتوحة بالكامل',
+              note: course.pricing?.note || defaultCourse.pricing?.note || '',
             },
           };
         }
@@ -137,6 +137,7 @@ export const saveAllCourses = (courses: Course[]): boolean => {
   try {
     localStorage.setItem(CUSTOM_COURSES_STORAGE_KEY, JSON.stringify(courses));
     window.dispatchEvent(new CustomEvent('tajweed_courses_updated', { detail: { courses } }));
+    window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: courses }));
     return true;
   } catch (e) {
     console.error('Error saving custom courses:', e);
