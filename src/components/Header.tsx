@@ -139,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="h-0.5 w-full bg-emerald-600/30" />
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="h-16 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
           
           {/* Right (RTL start): Sidebar Toggle & Course Identity */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -161,29 +161,31 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Platform Brand: شعار وهُوية منصة مدارج */}
+            {/* Platform Brand: شعار وهُوية منصة مدارج بوضوح عالٍ */}
             <button
               onClick={onReturnToHome}
-              className="flex items-center gap-2.5 p-1 sm:px-2.5 py-1 rounded-2xl hover:bg-slate-900/90 transition-all cursor-pointer group text-right border border-slate-800/80 hover:border-amber-400/40 bg-slate-950/60 shadow-xs"
+              className="flex items-center gap-3 p-1.5 sm:px-3 py-1.5 rounded-2xl hover:bg-slate-900/95 transition-all cursor-pointer group text-right border border-amber-400/30 hover:border-amber-400/70 bg-slate-900/80 shadow-md"
               title="منصة مدارج - العودة للرئيسية وتصفح الحقائب"
             >
-              {/* Logo / Sacred Calligraphy Emblem */}
+              {/* Logo / Sacred Calligraphy Emblem - Clear & Prominent */}
               <div className="relative shrink-0 flex items-center justify-center">
                 {homeConfig.platformLogoUrl && homeConfig.platformLogoUrl.trim() ? (
-                  <img
-                    src={homeConfig.platformLogoUrl.trim()}
-                    alt={homeConfig.platformName || 'شعار منصة مدارج'}
-                    className="w-8 h-8 sm:w-9 sm:h-9 object-contain rounded-xl p-0.5 drop-shadow-md border border-amber-400/60 bg-slate-900 ring-1 ring-amber-400/20"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLElement).style.display = 'none';
-                    }}
-                  />
+                  <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-xl bg-white/95 p-1 shadow-lg border-2 border-amber-400 ring-2 ring-amber-400/20 flex items-center justify-center group-hover:scale-105 transition-transform overflow-hidden">
+                    <img
+                      src={homeConfig.platformLogoUrl.trim()}
+                      alt={homeConfig.platformName || 'شعار منصة مدارج'}
+                      className="w-full h-full object-contain drop-shadow-xs"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
                 ) : (
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-amber-400 via-emerald-800 to-slate-950 flex items-center justify-center text-white shadow-md border border-amber-400/50 group-hover:scale-105 group-hover:border-amber-300 transition-all relative overflow-hidden">
-                    <span className="font-quran font-black text-amber-200 text-sm drop-shadow-sm select-none">
+                  <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-xl bg-gradient-to-br from-amber-400 via-emerald-800 to-slate-950 flex items-center justify-center text-white shadow-lg border-2 border-amber-400/70 group-hover:scale-105 group-hover:border-amber-300 transition-all relative overflow-hidden">
+                    <span className="font-quran font-black text-amber-200 text-lg sm:text-xl drop-shadow-sm select-none">
                       مـ
                     </span>
-                    <Sparkles className="w-2.5 h-2.5 text-amber-300 absolute -top-0.5 -right-0.5 animate-pulse" />
+                    <Sparkles className="w-3 h-3 text-amber-300 absolute top-0.5 right-0.5 animate-pulse" />
                   </div>
                 )}
               </div>
@@ -191,15 +193,15 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Platform Title */}
               <div className="flex flex-col justify-center leading-tight">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base sm:text-lg font-black font-quran bg-gradient-to-l from-amber-200 via-amber-300 to-emerald-300 bg-clip-text text-transparent group-hover:from-amber-100 group-hover:to-white transition-colors tracking-wide">
+                  <span className="text-lg sm:text-xl font-black font-quran bg-gradient-to-l from-amber-200 via-amber-300 to-emerald-300 bg-clip-text text-transparent group-hover:from-amber-100 group-hover:to-white transition-colors tracking-wide">
                     {homeConfig.platformName || 'مدارج'}
                   </span>
-                  <span className="text-[10px] bg-gradient-to-r from-amber-500/20 to-emerald-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.2 rounded-md font-quran font-bold hidden sm:inline shadow-2xs">
-                    علوم التجويد
+                  <span className="text-[10px] bg-gradient-to-r from-amber-500/20 to-emerald-500/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-md font-quran font-bold hidden sm:inline shadow-2xs">
+                    {homeConfig.platformBadgeText || 'علوم التجويد'}
                   </span>
                 </div>
-                <span className="text-[9px] text-slate-400 font-tajawal hidden md:block">
-                  المنصة التعليمية المتكاملة
+                <span className="text-[10px] text-slate-300 font-tajawal hidden md:block">
+                  {homeConfig.platformSlogan || 'المنصة التعليمية المتكاملة'}
                 </span>
               </div>
             </button>

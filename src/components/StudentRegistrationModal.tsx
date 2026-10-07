@@ -15,6 +15,7 @@ import {
 import { TrainerAccount, GroupThemeConfig } from '../types';
 import { WhatsAppSupport } from './WhatsAppSupport';
 import { getAllGroupThemes, setActiveStudentGroup } from '../utils/groupThemeStorage';
+import { getHomeConfig, subscribeHomeConfig, HomeConfig } from '../utils/homeConfigStorage';
 
 interface StudentRegistrationModalProps {
   isOpen: boolean;
@@ -56,6 +57,12 @@ export const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> =
   const [showTrainerPass, setShowTrainerPass] = useState<boolean>(false);
   const [trainerError, setTrainerError] = useState<string>('');
   const [isSubmittingTrainer, setIsSubmittingTrainer] = useState<boolean>(false);
+  const [homeConfig, setHomeConfig] = useState<HomeConfig>(() => getHomeConfig());
+
+  useEffect(() => {
+    const unsubHome = subscribeHomeConfig((cfg) => setHomeConfig(cfg));
+    return () => unsubHome();
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -227,11 +234,26 @@ export const StudentRegistrationModal: React.FC<StudentRegistrationModalProps> =
         {/* Top Decorative Gradient */}
         <div className="absolute top-0 right-0 left-0 h-2.5 bg-gradient-to-r from-amber-400 via-emerald-500 to-amber-400"></div>
 
-        {/* Header Branding */}
-        <div className="text-center pt-1 pb-1 space-y-1">
-          <div className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-300 px-3 py-1 rounded-full text-xs font-bold font-quran border border-emerald-300/80 shadow-sm">
+        {/* Header Branding with Clear Prominent Platform Logo */}
+        <div className="text-center pt-1 pb-2 space-y-2.5 flex flex-col items-center">
+          {homeConfig.platformLogoUrl && homeConfig.platformLogoUrl.trim() ? (
+            <div className="w-20 h-20 rounded-2xl bg-white p-2 shadow-xl border-2 border-amber-400 ring-4 ring-amber-400/20 flex items-center justify-center overflow-hidden">
+              <img
+                src={homeConfig.platformLogoUrl.trim()}
+                alt={homeConfig.platformName || 'شعار منصة مدارج'}
+                className="w-full h-full object-contain drop-shadow-xs"
+              />
+            </div>
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 via-emerald-800 to-slate-950 flex flex-col items-center justify-center text-white shadow-xl border-2 border-amber-400/80 ring-4 ring-amber-400/15">
+              <span className="font-quran font-black text-amber-200 text-2xl leading-none">مـ</span>
+              <span className="text-[10px] font-quran font-bold text-amber-300">{homeConfig.platformName || 'مدارج'}</span>
+            </div>
+          )}
+
+          <div className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-300 px-3.5 py-1 rounded-full text-xs font-bold font-quran border border-emerald-300/80 shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>منصة دروس التجويد القرآنية المعتمدة</span>
+            <span>منصة {homeConfig.platformName || 'مدارج'} - {homeConfig.platformBadgeText || 'المنصة التعليمية المعتمدة'}</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black font-quran text-slate-900 dark:text-amber-100">
             تسجيل الدخول وبدء الاستخدام

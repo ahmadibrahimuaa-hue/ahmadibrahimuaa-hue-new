@@ -483,45 +483,85 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
         {/* Top subtle golden-emerald gradient indicator */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500/70 via-emerald-500/70 to-amber-500/70" />
 
-        <div className="relative z-10 max-w-3xl space-y-4">
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           
-          {/* Metadata & Institute Branding */}
-          <div className="flex items-center gap-2.5 text-xs text-amber-200/70 flex-wrap">
-            <span className="text-amber-400 font-bold font-quran">
-              {homeConfig.platformBadgeText || 'المنصة التفاعلية الموحدة'}
-            </span>
-            <span aria-hidden="true" className="text-emerald-700">·</span>
-            <span className="text-stone-300">{homeConfig.authorText || 'جمع وإعداد: أحمد إبراهيم'}</span>
-            
-            {activeTheme && (
-              <>
-                <span aria-hidden="true" className="text-emerald-700">·</span>
-                <span className="text-amber-100 flex items-center gap-1.5">
-                  <InstituteLogo theme={activeTheme} className="w-3.5 h-3.5" iconClassName="w-3 h-3 text-amber-400" />
-                  <span>{activeTheme.instituteName}</span>
-                  <span className="text-emerald-300/60 font-mono">({activeTheme.groupName})</span>
+          {/* Prominent Platform Logo Showcase */}
+          <div className="flex items-center gap-4 shrink-0">
+            {homeConfig.platformLogoUrl && homeConfig.platformLogoUrl.trim() ? (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white/95 p-2 shadow-xl border-2 border-amber-400 ring-4 ring-amber-400/20 flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src={homeConfig.platformLogoUrl.trim()}
+                  alt={homeConfig.platformName || 'شعار المنصة'}
+                  className="w-full h-full object-contain drop-shadow-sm"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br from-amber-400 via-emerald-800 to-slate-950 flex flex-col items-center justify-center text-white shadow-xl border-2 border-amber-400/80 ring-4 ring-amber-400/15 shrink-0 relative overflow-hidden">
+                <span className="font-quran font-black text-amber-200 text-3xl sm:text-4xl drop-shadow-md leading-none">
+                  مـ
                 </span>
-              </>
+                <span className="text-[10px] font-quran font-bold text-amber-300/90 mt-1">
+                  {homeConfig.platformName || 'مدارج'}
+                </span>
+              </div>
             )}
 
-            {isTeacherMode && (
-              <>
-                <span aria-hidden="true" className="text-emerald-700">·</span>
-                <span className="text-amber-400 font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>وضع المعلم مفعّل</span>
-                </span>
-              </>
-            )}
+            <div className="md:hidden space-y-1">
+              <span className="inline-block text-xs bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2.5 py-0.5 rounded-lg font-quran font-bold">
+                {homeConfig.platformName || 'مدارج'}
+              </span>
+              <p className="text-[11px] text-amber-200/80">
+                {homeConfig.platformSlogan || 'منصة مدارج لعلوم التجويد والقرآن الكريم'}
+              </p>
+            </div>
           </div>
 
-          <h1 className="text-xl sm:text-3xl font-bold font-quran text-amber-50 leading-tight">
-            {homeConfig.mainTitle || 'المناهج التعليمية المقررة لمادة التجويد والقراءات'}
-          </h1>
+          <div className="flex-1 max-w-3xl space-y-4">
+            
+            {/* Metadata & Institute Branding */}
+            <div className="flex items-center gap-2.5 text-xs text-amber-200/70 flex-wrap">
+              <span className="bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-lg font-black font-quran shadow-xs">
+                {homeConfig.platformName || 'مدارج'}
+              </span>
+              <span aria-hidden="true" className="text-emerald-700">·</span>
+              <span className="text-amber-400 font-bold font-quran">
+                {homeConfig.platformBadgeText || 'المنصة التفاعلية الموحدة'}
+              </span>
+              <span aria-hidden="true" className="text-emerald-700">·</span>
+              <span className="text-stone-300">{homeConfig.authorText || 'جمع وإعداد: أحمد إبراهيم'}</span>
+              
+              {activeTheme && (
+                <>
+                  <span aria-hidden="true" className="text-emerald-700">·</span>
+                  <span className="text-amber-100 flex items-center gap-1.5">
+                    <InstituteLogo theme={activeTheme} className="w-3.5 h-3.5" iconClassName="w-3 h-3 text-amber-400" />
+                    <span>{activeTheme.instituteName}</span>
+                    <span className="text-emerald-300/60 font-mono">({activeTheme.groupName})</span>
+                  </span>
+                </>
+              )}
 
-          <p className="text-xs sm:text-sm text-stone-200 leading-relaxed max-w-2xl font-normal">
-            {homeConfig.introParagraph || 'منظومة مناهج متكاملة ومحققة في علم التجويد والقراءات؛ تبدأ بالحقيبة التأسيسية الأولى (أصول التلاوة)، وتتوالى الحقائب التالية تباعاً بالتمرير والاستيفاء المنهجي.'}
-          </p>
+              {isTeacherMode && (
+                <>
+                  <span aria-hidden="true" className="text-emerald-700">·</span>
+                  <span className="text-amber-400 font-bold flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>وضع المعلم مفعّل</span>
+                  </span>
+                </>
+              )}
+            </div>
+
+            <h1 className="text-xl sm:text-3xl font-bold font-quran text-amber-50 leading-tight">
+              {homeConfig.mainTitle || 'المناهج التعليمية المقررة لمادة التجويد والقراءات'}
+            </h1>
+
+            <p className="text-xs sm:text-sm text-stone-200 leading-relaxed max-w-2xl font-normal">
+              {homeConfig.introParagraph || 'منظومة مناهج متكاملة ومحققة في علم التجويد والقراءات؛ تبدأ بالحقيبة التأسيسية الأولى (أصول التلاوة)، وتتوالى الحقائب التالية تباعاً بالتمرير والاستيفاء المنهجي.'}
+            </p>
 
           {/* Quick Actions & Navigation Bar */}
           <div className="pt-2 flex flex-wrap items-center gap-2.5 text-xs font-tajawal">
@@ -614,6 +654,7 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
               </button>
             )}
 
+          </div>
           </div>
 
         </div>
