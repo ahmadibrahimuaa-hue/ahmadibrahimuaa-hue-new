@@ -34,10 +34,9 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
   course,
   onNotify,
 }) => {
-  if (!isOpen || !course) return null;
-
   const [accessMap, setAccessMap] = useState<StudentCourseAccessMap>(() => getStoredStudentAccessMap());
   const [currentMode, setCurrentMode] = useState<BagAccessMode>(() => {
+    if (!course) return 'all_unlocked';
     const defaultMode = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
     return getBagAccessMode(course.id, defaultMode);
   });
@@ -57,9 +56,10 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
   }, []);
 
   useEffect(() => {
+    if (!course) return;
     const defaultMode = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
     setCurrentMode(getBagAccessMode(course.id, defaultMode));
-  }, [course.id, course.status]);
+  }, [course?.id, course?.status]);
 
   // Aggregate all enrolled & active students
   const allStudents = useMemo(() => {
@@ -102,6 +102,7 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
 
   // Compute student access statuses
   const evaluatedStudents = useMemo(() => {
+    if (!course) return [];
     return allStudents.map((s) => {
       const effective = getStudentEffectiveCourseAccess(s.name, course.id, course.status || 'available');
       return {
@@ -110,7 +111,7 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
         reason: effective.reason,
       };
     });
-  }, [allStudents, course.id, course.status, accessMap, currentMode]);
+  }, [allStudents, course?.id, course?.status, accessMap, currentMode]);
 
   // Filter students by search and filter state
   const filteredStudents = useMemo(() => {
@@ -126,6 +127,8 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
       return true;
     });
   }, [evaluatedStudents, filterState, searchQuery]);
+
+  if (!isOpen || !course) return null;
 
   const grantedCount = evaluatedStudents.filter((s) => s.isUnlocked).length;
   const lockedCount = evaluatedStudents.filter((s) => !s.isUnlocked).length;

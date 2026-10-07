@@ -275,6 +275,8 @@ export interface StudentSubmission {
   trainerId?: string;
   trainerName?: string;
   examLevel?: ExamDifficultyLevel; // مبتدئ | متوسط | متقدم
+  courseId?: string;
+  unitNumber?: number;
 }
 
 export interface StudentProfile {

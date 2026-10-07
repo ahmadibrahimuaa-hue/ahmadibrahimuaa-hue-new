@@ -19,6 +19,9 @@ export type HomeAnnouncementType = 'info' | 'success' | 'warning' | 'emerald';
 export type HomeDefaultView = 'all' | 'by_level' | 'current_bag';
 
 export interface HomeConfig {
+  platformName?: string;
+  platformLogoUrl?: string;
+  platformSlogan?: string;
   mainTitle: string;
   subtitle: string;
   authorText: string;
@@ -38,12 +41,15 @@ export interface HomeConfig {
 }
 
 export const DEFAULT_HOME_CONFIG: HomeConfig = {
-  mainTitle: 'دروس التجويد - المناهج والحقائب التعليمية المقررة',
-  subtitle: 'منصة دروس التجويد: منظومة تدريبية متدرجة من التأسيس إلى الإتقان والإجازة',
-  authorText: 'جمع وإعداد: أحمد إبراهيم',
-  platformBadgeText: 'منصة دروس التجويد',
-  introParagraph: 'منظومة منهجية متكاملة لدروس التجويد تبدأ بالحقيبة التأسيسية الشاملة (أصول التلاوة والتأسيس التجويدي)، وتتوالى الحقائب التالية تباعاً (قواعد التقاء الساكنين، أحكام الإدغام العام، مخارج الحروف وصفاتها، ومنظومة الإجازة).',
-  announcementText: 'أهلاً بكم في منصة دروس التجويد! تصفح الحقائب التعليمية المقررة وتابع دراستك التجويدية بكل يسر وسهولة.',
+  platformName: 'مدارج',
+  platformLogoUrl: '',
+  platformSlogan: 'منصة مدارج لعلوم التجويد والقرآن الكريم',
+  mainTitle: 'منصة مدارج - المناهج والحقائب التعليمية المقررة',
+  subtitle: 'منظومة مدارج الرقمية: مسارات تدريبية متدرجة من التأسيس إلى الإتقان والإجازة بالسند',
+  authorText: 'إشراف وتأصيل: أحمد إبراهيم',
+  platformBadgeText: 'منصة مدارج لعلوم القرآن',
+  introParagraph: 'منظومة منهجية متكاملة لعلوم التجويد تبدأ بالحقيبة التأسيسية الشاملة (أصول التلاوة والتأسيس التجويدي)، وتتوالى الحقائب التالية تباعاً (قواعد التقاء الساكنين، أحكام الإدغام العام، مخارج الحروف وصفاتها، ومنظومة الإجازة).',
+  announcementText: 'أهلاً بكم في منصة مدارج لعلوم التجويد والقرآن الكريم! تصفح الحقائب التعليمية المقررة وتابع دراستك التجويدية بكل يسر وسهولة.',
   showAnnouncement: false,
   announcementType: 'emerald',
   defaultViewMode: 'all',

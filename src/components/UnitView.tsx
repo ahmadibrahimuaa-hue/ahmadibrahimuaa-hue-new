@@ -450,7 +450,17 @@ export const UnitView: React.FC<UnitViewProps> = ({
 
     // Only save student submissions when NOT in teacher mode
     if (!isTeacherMode) {
-      await saveSubmission(`[${course?.shortTitle || courseId}] ${unit.title}`, unit.quiz.title, score, quizQuestions.length, isTeacherMode);
+      await saveSubmission(
+        `[${course?.shortTitle || courseId}] ${unit.title}`,
+        unit.quiz.title,
+        score,
+        quizQuestions.length,
+        isTeacherMode,
+        undefined,
+        undefined,
+        courseId,
+        unit.unitNumber
+      );
     }
   };
 

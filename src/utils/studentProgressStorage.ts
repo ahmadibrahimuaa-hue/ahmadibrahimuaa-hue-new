@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getStudentProfile, clearStudentProfile, clearAllSubmissions } from './studentStorage';
 import { Course } from '../types';
@@ -646,5 +646,48 @@ export const resetProgress = async (courseId?: string) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('tajweed_progress_reset'));
     window.dispatchEvent(new CustomEvent('tajweed_opened_courses_updated', { detail: [] }));
+  }
+};
+
+export interface CloudStudentProgressRecord {
+  id: string; // `${studentName}_${courseId}`
+  studentName: string;
+  courseId: string;
+  completedUnitNumbers: number[];
+  readSections?: string[];
+  examBestScore?: number | null;
+  examCompleted?: boolean;
+  totalQuizzesPassed?: number;
+  updatedAt: number;
+}
+
+export const subscribeAllStudentsProgress = (
+  callback: (records: CloudStudentProgressRecord[]) => void
+): (() => void) => {
+  try {
+    const unsub = onSnapshot(collection(db, 'student_progress'), (snap) => {
+      const records: CloudStudentProgressRecord[] = [];
+      snap.forEach((d) => {
+        const data = d.data();
+        records.push({
+          id: d.id,
+          studentName: data.studentName || '',
+          courseId: data.courseId || '',
+          completedUnitNumbers: Array.isArray(data.completedUnitNumbers) ? data.completedUnitNumbers : [],
+          readSections: Array.isArray(data.readSections) ? data.readSections : [],
+          examBestScore: data.examBestScore !== undefined ? data.examBestScore : null,
+          examCompleted: Boolean(data.examCompleted),
+          totalQuizzesPassed: Number(data.totalQuizzesPassed) || 0,
+          updatedAt: Number(data.updatedAt) || 0,
+        });
+      });
+      callback(records);
+    }, (err) => {
+      console.warn('Error subscribing all students progress from Firestore:', err);
+    });
+    return unsub;
+  } catch (e) {
+    console.warn('subscribeAllStudentsProgress failed:', e);
+    return () => {};
   }
 };

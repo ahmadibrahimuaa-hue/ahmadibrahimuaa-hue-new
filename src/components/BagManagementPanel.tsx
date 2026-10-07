@@ -9,6 +9,7 @@ import {
   UserX, SlidersHorizontal, UserPlus
 } from 'lucide-react';
 import { Course, Unit, Lesson, CourseStatus, CourseLevel } from '../types';
+import { getAllCourses, getCourseById } from '../data/courses';
 import { LessonClassifierModal } from './LessonClassifierModal';
 import { 
   getCustomStoredCourses, 
@@ -63,7 +64,7 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
   onSelectCourseToView,
   activeCourseId = 'foundational_rules',
 }) => {
-  const [courses, setCourses] = useState<Course[]>(getCustomStoredCourses());
+  const [courses, setCourses] = useState<Course[]>(() => getAllCourses());
   const [selectedBagId, setSelectedBagId] = useState<string>(activeCourseId);
   const [viewMode, setViewMode] = useState<'bags_list' | 'edit_bag' | 'manage_units'>('bags_list');
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -108,7 +109,7 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterType, setFilterType] = useState<'all' | 'root_only' | 'nested_only' | 'available' | 'locked' | 'paid'>('all');
-  const [displayMode, setDisplayMode] = useState<'nested_tree' | 'grid'>('nested_tree');
+  const [displayMode, setDisplayMode] = useState<'nested_tree' | 'grid'>('grid');
 
   // Drag & Drop State
   const [draggedCourseId, setDraggedCourseId] = useState<string | null>(null);
@@ -129,6 +130,9 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
   const [showAddStudentForm, setShowAddStudentForm] = useState<boolean>(false);
 
   useEffect(() => {
+    const unsubCourses = subscribeCourses((updated) => {
+      setCourses(updated);
+    });
     const unsubAccess = subscribeStudentAccess((map) => {
       setAccessMap(map);
     });
@@ -137,6 +141,7 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
     };
     window.addEventListener('tajweed_bag_access_modes_updated', handleModes);
     return () => {
+      unsubCourses();
       unsubAccess();
       window.removeEventListener('tajweed_bag_access_modes_updated', handleModes);
     };
@@ -221,8 +226,9 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
   };
 
   useEffect(() => {
+    setCourses(getAllCourses());
     const unsub = subscribeCourses((updatedList) => {
-      setCourses(updatedList);
+      setCourses(updatedList && updatedList.length > 0 ? updatedList : getAllCourses());
     });
     return () => unsub();
   }, []);
@@ -742,6 +748,70 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
           <span className="font-bold">{errorMessage}</span>
         </div>
       )}
+
+      {/* DYNAMIC BAGS QUICK BAR (قائمة ديناميكية بجميع الحقائب المتاحة بالمنصة) */}
+      <div className="bg-gradient-to-b from-slate-900 to-slate-950 rounded-2xl p-4 border border-slate-800 space-y-3 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-amber-400" />
+            <h4 className="text-xs sm:text-sm font-bold font-quran text-amber-200">
+              جميع الحقائب التجويدية المقررة في المنصة ({courses.length} حقائب متاحة):
+            </h4>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
+            <span>🟢 نشطة: <strong className="text-emerald-400">{courses.filter(c => (c.status || 'available') === 'available').length}</strong></span>
+            <span>🔒 مقفلة: <strong className="text-amber-400">{courses.filter(c => c.status === 'locked').length}</strong></span>
+            <span>💰 مدفوعة: <strong className="text-purple-300">{courses.filter(c => c.pricing?.isPaid).length}</strong></span>
+          </div>
+        </div>
+
+        {/* Dynamic Horizontal Bag Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+          {courses.map((c) => {
+            const isSelected = selectedBagId === c.id;
+            const isAvailable = (c.status || 'available') === 'available';
+            const isLocked = c.status === 'locked';
+            const isPaid = c.pricing?.isPaid;
+
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  setSelectedBagId(c.id);
+                  if (viewMode === 'edit_bag') {
+                    setEditingCourse(JSON.parse(JSON.stringify(c)));
+                  }
+                }}
+                className={`p-2.5 rounded-xl border text-right transition-all flex flex-col justify-between gap-1.5 cursor-pointer relative group ${
+                  isSelected
+                    ? 'bg-gradient-to-br from-emerald-950 via-slate-900 to-emerald-950 border-amber-400 ring-2 ring-amber-400/40 text-white shadow-md'
+                    : 'bg-slate-950/70 hover:bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="bg-slate-800/80 px-2 py-0.5 rounded text-[10px] font-bold text-amber-300">
+                    {c.badge || 'حقيبة'}
+                  </span>
+                  {isSelected && (
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  )}
+                </div>
+
+                <div className="truncate">
+                  <span className="text-xs font-bold font-quran truncate block text-slate-100">
+                    {c.shortTitle || c.title}
+                  </span>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                    <span>{c.units?.length || 0} أبواب</span>
+                    <span>{isPaid ? '💰 مدفوعة' : isLocked ? '🔒 مقفلة' : '🟢 نشطة'}</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* VIEW 1: BAGS LIST & QUICK CONTROLS */}
       {viewMode === 'bags_list' && (
@@ -1371,12 +1441,36 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
         <form onSubmit={handleSaveCourse} className="space-y-6 animate-fadeIn">
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-5">
             
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
               <h3 className="text-base font-black font-quran text-amber-300 flex items-center gap-2">
                 <Edit3 className="w-4 h-4" />
                 <span>{isCreatingNewBag ? 'إضافة حقيبة تدريبية جديدة' : `تعديل بيانات الحقيبة (${editingCourse.shortTitle || ''})`}</span>
               </h3>
-              <span className="text-xs text-slate-400 font-sans">ID: {editingCourse.id}</span>
+              <div className="flex items-center gap-2">
+                {!isCreatingNewBag && (
+                  <div className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
+                    <span className="text-slate-400 font-quran font-bold">الحقيبة:</span>
+                    <select
+                      value={editingCourse.id || ''}
+                      onChange={(e) => {
+                        const target = courses.find((c) => c.id === e.target.value);
+                        if (target) {
+                          setEditingCourse(JSON.parse(JSON.stringify(target)));
+                          setSelectedBagId(target.id);
+                        }
+                      }}
+                      className="bg-transparent text-amber-300 font-bold outline-none cursor-pointer font-quran"
+                    >
+                      {courses.map((c) => (
+                        <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                          {c.shortTitle || c.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <span className="text-xs text-slate-400 font-sans">ID: {editingCourse.id}</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-quran">
@@ -1661,7 +1755,23 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Bag Switcher Dropdown */}
+              <div className="flex items-center gap-1.5 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
+                <span className="text-slate-400 font-quran font-bold">تبديل الحقيبة:</span>
+                <select
+                  value={currentSelectedCourse.id}
+                  onChange={(e) => setSelectedBagId(e.target.value)}
+                  className="bg-transparent text-amber-300 font-bold outline-none cursor-pointer font-quran"
+                >
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                      {c.shortTitle || c.title} ({c.units?.length || 0} باب)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <button
                 onClick={() => handleOpenAddUnit(currentSelectedCourse.id)}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer font-quran"

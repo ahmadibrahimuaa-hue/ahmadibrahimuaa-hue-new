@@ -25,13 +25,14 @@ import {
   deleteWaitlistEntry,
   joinCourseWaitlist
 } from '../utils/waitlistStorage';
-import { ALL_COURSES } from '../data/courses';
+import { getAllCourses } from '../data/courses';
 
 interface TeacherWaitlistPanelProps {
   activeCourseId?: string;
 }
 
 export const TeacherWaitlistPanel: React.FC<TeacherWaitlistPanelProps> = ({ activeCourseId }) => {
+  const [courses, setCourses] = useState(() => getAllCourses());
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved'>('all');
   const [filterCourse, setFilterCourse] = useState<string>('all');
@@ -43,9 +44,13 @@ export const TeacherWaitlistPanel: React.FC<TeacherWaitlistPanelProps> = ({ acti
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newStudentName, setNewStudentName] = useState<string>('');
   const [newStudentPhone, setNewStudentPhone] = useState<string>('');
-  const [newSelectedCourse, setNewSelectedCourse] = useState<string>(activeCourseId || 'foundational_rules');
+  const [newSelectedCourse, setNewSelectedCourse] = useState<string>(activeCourseId || (courses[0]?.id || 'foundational_rules'));
   const [newAutoUnlock, setNewAutoUnlock] = useState<boolean>(true);
   const [isAdding, setIsAdding] = useState<boolean>(false);
+
+  useEffect(() => {
+    setCourses(getAllCourses());
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeWaitlistEntries((list) => {
@@ -102,7 +107,7 @@ export const TeacherWaitlistPanel: React.FC<TeacherWaitlistPanelProps> = ({ acti
     }
 
     setIsAdding(true);
-    const courseObj = ALL_COURSES.find((c) => c.id === newSelectedCourse) || ALL_COURSES[0];
+    const courseObj = courses.find((c) => c.id === newSelectedCourse) || courses[0];
     await joinCourseWaitlist(
       courseObj.id,
       courseObj.title,
@@ -268,7 +273,7 @@ export const TeacherWaitlistPanel: React.FC<TeacherWaitlistPanelProps> = ({ acti
           className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
         >
           <option value="all">جميع الحقائب التدريبية</option>
-          {ALL_COURSES.map((c) => (
+          {courses.map((c) => (
             <option key={c.id} value={c.id}>
               {c.shortTitle || c.title}
             </option>
@@ -340,7 +345,7 @@ export const TeacherWaitlistPanel: React.FC<TeacherWaitlistPanelProps> = ({ acti
                   onChange={(e) => setNewSelectedCourse(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-amber-400"
                 >
-                  {ALL_COURSES.map((c) => (
+                  {courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
                     </option>

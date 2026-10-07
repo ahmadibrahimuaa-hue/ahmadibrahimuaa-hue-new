@@ -11,7 +11,7 @@ import { RulesCheatSheet } from './components/RulesCheatSheet';
 import { BooksView } from './components/BooksView';
 import { StudentBar } from './components/StudentBar';
 import { PlatformHome } from './components/PlatformHome';
-import { TeacherDashboardModal } from './components/TeacherDashboardModal';
+import { TeacherDashboardModal, TeacherTab } from './components/TeacherDashboardModal';
 import { TeacherAuthModal } from './components/TeacherAuthModal';
 import { StudentProgressModal } from './components/StudentProgressModal';
 import { StudentRegistrationModal } from './components/StudentRegistrationModal';
@@ -173,7 +173,7 @@ export default function App() {
 
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [showTeacherDashboard, setShowTeacherDashboard] = useState<boolean>(false);
-  const [teacherDashboardTab, setTeacherDashboardTab] = useState<'submissions' | 'unit_questions' | 'exam_questions' | 'certificate' | 'trainers' | 'bag_management' | 'waitlist'>('submissions');
+  const [teacherDashboardTab, setTeacherDashboardTab] = useState<TeacherTab>('submissions');
   const [authTrainer, setAuthTrainer] = useState<TrainerAccount | null>(() => getCurrentAuthTrainer());
   const [authRole, setAuthRole] = useState<'super_admin' | 'trainer'>(() => {
     const curr = getCurrentAuthTrainer();

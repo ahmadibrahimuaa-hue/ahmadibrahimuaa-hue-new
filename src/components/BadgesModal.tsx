@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Award, X, Sparkles, CheckCircle2, Lock, Trophy, Star, BookOpen, Layers, ShieldCheck } from 'lucide-react';
 import { StudentBadge, getCourseBadges } from '../utils/badgeSystem';
 import { getStudentProgress } from '../utils/studentProgressStorage';
-import { ALL_COURSES, getCourseById } from '../data/courses';
+import { getAllCourses, getCourseById } from '../data/courses';
 
 interface BadgesModalProps {
   isOpen: boolean;
@@ -20,7 +20,8 @@ export const BadgesModal: React.FC<BadgesModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentCourse = getCourseById(selectedCourseId) || ALL_COURSES[0];
+  const allCourses = getAllCourses();
+  const currentCourse = getCourseById(selectedCourseId) || allCourses[0];
   const progress = getStudentProgress(selectedCourseId);
   const badges = getCourseBadges(progress, selectedCourseId);
 
@@ -89,7 +90,7 @@ export const BadgesModal: React.FC<BadgesModalProps> = ({
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
             {/* Courses Tab */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {ALL_COURSES.map((course) => (
+              {allCourses.map((course) => (
                 <button
                   key={course.id}
                   onClick={() => setSelectedCourseId(course.id)}

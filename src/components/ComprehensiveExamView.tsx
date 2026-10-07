@@ -277,7 +277,8 @@ export const ComprehensiveExamView: React.FC<ComprehensiveExamViewProps> = ({
       totalPoints,
       false,
       `اجتاز ${finalScore} من ${totalPoints} بنسبة ${finalPercentage}% - المستوى: ${levelAr} - التقدير: ${getGradeTitle(finalPercentage)}`,
-      calculatedLevel
+      calculatedLevel,
+      course?.id
     );
   };
 

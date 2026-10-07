@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   UserCheck, ShieldCheck, Award, Trash2, Download, Search, X, 
   CheckCircle2, AlertCircle, FileSpreadsheet, Lock, RefreshCw, Eye, Loader2, Wifi,
   PlusCircle, Edit3, HelpCircle, BookOpen, Layers, Check, RotateCcw, AlertTriangle,
-  Upload, Image as ImageIcon, Palette, Users, Key, Copy, Shield, ExternalLink, Briefcase, BarChart3, FileText, Star
+  Upload, Image as ImageIcon, Palette, Users, Key, Copy, Shield, ExternalLink, Briefcase, BarChart3, FileText, Star,
+  ChevronDown, ChevronUp, UserMinus, UserX, Calendar, Clock, TrendingUp, Sparkles
 } from 'lucide-react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { StudentSubmission, ComprehensiveExamQuestion, TrainerAccount } from '../types';
-import { getStudentSubmissionsAsync, clearAllSubmissions, getStudentProfile } from '../utils/studentStorage';
+import { getStudentSubmissionsAsync, clearAllSubmissions, getStudentProfile, deleteSingleSubmission, deleteStudentSubmissionsByName } from '../utils/studentStorage';
 import { 
   getUnitQuizQuestions, 
   getComprehensiveExamBank, 
@@ -41,15 +42,44 @@ import { TeacherGuidePanel } from './TeacherGuidePanel';
 import { StudentAccessManagementPanel } from './StudentAccessManagementPanel';
 import { InstituteThemeCustomizerPanel } from './InstituteThemeCustomizerPanel';
 import { TeacherSelfReflectionTab } from './TeacherSelfReflectionTab';
+import { TeacherUnitProgressReports } from './TeacherUnitProgressReports';
+import { PlatformIdentityPanel } from './PlatformIdentityPanel';
 import { ExamDifficultyLevel } from '../types';
 import { getActiveTrainersList } from '../utils/trainerStorage';
 import { subscribeWaitlistEntries, WaitlistEntry } from '../utils/waitlistStorage';
+import { getHomeConfig, saveHomeConfig, subscribeHomeConfig, HomeConfig, resetHomeConfig } from '../utils/homeConfigStorage';
+import { compressImage } from '../utils/imageCompressor';
+
+export type TeacherTab = 
+  | 'unit_progress_reports'
+  | 'teacher_guide'
+  | 'unit_questions'
+  | 'exam_questions'
+  | 'certificate'
+  | 'students_access'
+  | 'submissions'
+  | 'analytics'
+  | 'self_reflections'
+  | 'bag_management'
+  | 'waitlist'
+  | 'institute_themes'
+  | 'trainers'
+  | 'platform_identity';
+
+const COURSE_SPECIFIC_TABS: TeacherTab[] = [
+  'unit_progress_reports',
+  'teacher_guide',
+  'unit_questions',
+  'exam_questions',
+  'certificate',
+  'students_access',
+];
 
 interface TeacherDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLockTeacherMode: () => void;
-  initialTab?: 'analytics' | 'submissions' | 'teacher_guide' | 'unit_questions' | 'exam_questions' | 'certificate' | 'trainers' | 'bag_management' | 'waitlist' | 'students_access' | 'institute_themes';
+  initialTab?: TeacherTab;
   activeCourseId?: string;
   authTrainer?: TrainerAccount | null;
   authRole?: 'super_admin' | 'trainer';
@@ -59,14 +89,15 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   isOpen,
   onClose,
   onLockTeacherMode,
-  initialTab = 'submissions',
+  initialTab = 'submissions' as TeacherTab,
   activeCourseId = 'foundational_rules',
   authTrainer = null,
   authRole = 'trainer',
 }) => {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'submissions' | 'self_reflections' | 'teacher_guide' | 'unit_questions' | 'exam_questions' | 'certificate' | 'trainers' | 'bag_management' | 'waitlist' | 'students_access' | 'institute_themes'>(
-    initialTab
-  );
+  const [activeTab, setActiveTab] = useState<TeacherTab>(initialTab);
+  const [navSection, setNavSection] = useState<'bag_tools' | 'general_tools'>(() => {
+    return COURSE_SPECIFIC_TABS.includes(initialTab as TeacherTab) ? 'bag_tools' : 'general_tools';
+  });
 
   // Waitlist Pending Counter
   const [pendingWaitlistCount, setPendingWaitlistCount] = useState<number>(0);
@@ -107,6 +138,7 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
   useEffect(() => {
     if (isOpen && initialTab) {
       setActiveTab(initialTab);
+      setNavSection(COURSE_SPECIFIC_TABS.includes(initialTab as TeacherTab) ? 'bag_tools' : 'general_tools');
     }
   }, [isOpen, initialTab]);
 
@@ -186,11 +218,68 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
     }
   };
 
-  // Submissions State
+  // Submissions State & Individual Student Deletion
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeStudentProfile, setActiveStudentProfile] = useState<{ name: string; registeredAt: string } | null>(null);
+
+  // Submissions View Mode: grouped by student (individual student records) or all raw submissions
+  const [submissionsViewMode, setSubmissionsViewMode] = useState<'by_student' | 'all_records'>('by_student');
+  const [expandedStudents, setExpandedStudents] = useState<Record<string, boolean>>({});
+
+  // Individual Student Record Deletion State
+  const [studentToDelete, setStudentToDelete] = useState<{ studentName: string; count: number } | null>(null);
+  const [deleteSubmissionTarget, setDeleteSubmissionTarget] = useState<StudentSubmission | null>(null);
+  const [isDeletingSubmission, setIsDeletingSubmission] = useState<boolean>(false);
+  const [submissionDeleteMsg, setSubmissionDeleteMsg] = useState<string | null>(null);
+
+  const toggleStudentExpanded = (studentName: string) => {
+    setExpandedStudents((prev) => ({
+      ...prev,
+      [studentName]: !prev[studentName],
+    }));
+  };
+
+  const handleDeleteStudentAllConfirm = async () => {
+    if (!studentToDelete) return;
+    setIsDeletingSubmission(true);
+    const targetName = studentToDelete.studentName;
+    try {
+      await deleteStudentSubmissionsByName(targetName);
+      setSubmissions((prev) => prev.filter((s) => (s.studentName || '').trim() !== targetName.trim()));
+      setSubmissionDeleteMsg(`تم حذف كامل سجل ونتائج الطالب "${targetName}" بنجاح (${studentToDelete.count} سجلات).`);
+    } catch (err) {
+      console.error('Failed to delete student submissions:', err);
+    } finally {
+      setIsDeletingSubmission(false);
+      setStudentToDelete(null);
+      setTimeout(() => setSubmissionDeleteMsg(null), 4000);
+    }
+  };
+
+  const handleDeleteSubmissionConfirm = async (deleteAllForStudent: boolean = false) => {
+    if (!deleteSubmissionTarget) return;
+    setIsDeletingSubmission(true);
+    const target = deleteSubmissionTarget;
+    try {
+      if (deleteAllForStudent) {
+        await deleteStudentSubmissionsByName(target.studentName);
+        setSubmissions((prev) => prev.filter((s) => (s.studentName || '').trim() !== (target.studentName || '').trim()));
+        setSubmissionDeleteMsg(`تم حذف كافة نتائج وسجلات الطالب "${target.studentName}" بنجاح.`);
+      } else {
+        await deleteSingleSubmission(target.id, target.studentName, target.timestamp);
+        setSubmissions((prev) => prev.filter((s) => s.id !== target.id));
+        setSubmissionDeleteMsg(`تم حذف نتيجة "${target.unitTitle}" للطالب "${target.studentName}" بنجاح.`);
+      }
+    } catch (err) {
+      console.error('Delete submission error:', err);
+    } finally {
+      setIsDeletingSubmission(false);
+      setDeleteSubmissionTarget(null);
+      setTimeout(() => setSubmissionDeleteMsg(null), 3500);
+    }
+  };
 
   // Questions State
   const [selectedUnitNumber, setSelectedUnitNumber] = useState<number>(1);
@@ -238,7 +327,6 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
     acc[u.unitNumber] = u.title;
     return acc;
   }, {} as Record<number, string>);
-  const isIdgham = selectedCourseId === 'idgham';
 
   const fetchSubmissions = async () => {
     setLoading(true);
@@ -276,6 +364,11 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
               date: data.date || '',
               timestamp: Number(data.timestamp) || 0,
               details: data.details || '',
+              trainerId: data.trainerId || '',
+              trainerName: data.trainerName || '',
+              examLevel: data.examLevel || undefined,
+              courseId: data.courseId || undefined,
+              unitNumber: data.unitNumber !== undefined ? Number(data.unitNumber) : undefined,
             });
           });
           list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -314,6 +407,84 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
       setSelectedUnitNumber(availableUnitNumbers[0] || 1);
     }
   }, [selectedCourseId, availableUnitNumbers, selectedUnitNumber]);
+
+  // Filters for Submissions (Unconditionally called before any early return)
+  const filteredSubmissions = useMemo(() => {
+    const sTerm = (searchTerm || '').toLowerCase().trim();
+    return submissions.filter((s) => {
+      const matchesSearch =
+        !sTerm ||
+        (s.studentName || '').toLowerCase().includes(sTerm) ||
+        (s.unitTitle || '').toLowerCase().includes(sTerm) ||
+        (s.testType || '').toLowerCase().includes(sTerm) ||
+        (s.trainerName || '').toLowerCase().includes(sTerm);
+
+      const matchesTrainer =
+        trainerFilter === 'all'
+          ? true
+          : s.trainerId === trainerFilter ||
+            (authTrainer && trainerFilter === authTrainer.id && (s.trainerId === authTrainer.id || s.trainerName === authTrainer.name));
+
+      return matchesSearch && matchesTrainer;
+    });
+  }, [submissions, searchTerm, trainerFilter, authTrainer]);
+
+  // Grouped students calculation (كل طالب على حدة)
+  const studentGroups = useMemo(() => {
+    const map = new Map<string, {
+      studentName: string;
+      trainerName?: string;
+      trainerId?: string;
+      submissions: StudentSubmission[];
+      totalTests: number;
+      avgPercentage: number;
+      bestPercentage: number;
+      lastDate: string;
+      lastTimestamp: number;
+    }>();
+
+    filteredSubmissions.forEach((sub) => {
+      const key = (sub.studentName || 'طالب جديد').trim();
+      if (!map.has(key)) {
+        map.set(key, {
+          studentName: key,
+          trainerName: sub.trainerName,
+          trainerId: sub.trainerId,
+          submissions: [],
+          totalTests: 0,
+          avgPercentage: 0,
+          bestPercentage: 0,
+          lastDate: sub.date,
+          lastTimestamp: sub.timestamp || 0,
+        });
+      }
+      const group = map.get(key)!;
+      group.submissions.push(sub);
+      if (sub.trainerName && !group.trainerName) {
+        group.trainerName = sub.trainerName;
+        group.trainerId = sub.trainerId;
+      }
+    });
+
+    const result = Array.from(map.values()).map((g) => {
+      const total = g.submissions.length;
+      const sum = g.submissions.reduce((acc, curr) => acc + (curr.percentage || 0), 0);
+      const avg = total > 0 ? Math.round(sum / total) : 0;
+      const best = g.submissions.reduce((max, curr) => Math.max(max, curr.percentage || 0), 0);
+      const sorted = [...g.submissions].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      return {
+        ...g,
+        totalTests: total,
+        avgPercentage: avg,
+        bestPercentage: best,
+        lastDate: sorted[0]?.date || g.lastDate,
+        lastTimestamp: sorted[0]?.timestamp || g.lastTimestamp,
+        submissions: sorted,
+      };
+    });
+
+    return result.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+  }, [filteredSubmissions]);
 
   if (!isOpen) return null;
 
@@ -455,16 +626,6 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
     }
   };
 
-  // Filters for Submissions
-  const filteredSubmissions = submissions.filter((s) => {
-    const sTerm = (searchTerm || '').toLowerCase();
-    return (
-      (s.studentName || '').toLowerCase().includes(sTerm) ||
-      (s.unitTitle || '').toLowerCase().includes(sTerm) ||
-      (s.testType || '').toLowerCase().includes(sTerm)
-    );
-  });
-
   // Filters for Unit Questions
   const filteredUnitQs = unitQuestions.filter((q) => {
     const qTerm = (questionSearch || '').toLowerCase();
@@ -493,8 +654,8 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
       return;
     }
 
-    let report = `=== تقرير نتائج وتسجيلات الطلاب - منصة الحقائب التجويدية ===\n`;
-    report += `الحقيبة المحددة: ${isIdgham ? 'أحكام الإدغام' : 'التقاء الساكنين'}\n`;
+    let report = `=== تقرير نتائج وتسجيلات الطلاب - منصة مدارج لعلوم التجويد والقرآن ===\n`;
+    report += `الحقيبة المحددة: ${currentCourse.shortTitle || currentCourse.title}\n`;
     report += `تاريخ التصدير: ${new Date().toLocaleString('ar-EG')}\n\n`;
 
     filteredSubmissions.forEach((sub, i) => {
@@ -560,204 +721,416 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
           </div>
         </div>
 
-        {/* Course Switcher Bar inside Teacher Dashboard */}
-        <div className="bg-slate-950 px-5 py-2.5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 shrink-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-amber-300 font-bold font-quran flex items-center gap-1.5 shrink-0">
-              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-              اختر الحقيبة التدريبية المراد إدارتها:
-            </span>
-            <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-700 overflow-x-auto max-w-full">
-              {allCourses.map((c, idx) => {
-                const isSelected = selectedCourseId === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      setSelectedCourseId(c.id);
-                      setSelectedUnitNumber(c.units?.[0]?.unitNumber || 1);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                      isSelected
-                        ? 'bg-emerald-700 text-white shadow-md border border-emerald-500 font-extrabold'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent'
-                    }`}
-                  >
-                    <span>{idx + 1}. {c.shortTitle || c.title}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <button
-            onClick={handleResetDefaults}
-            className="text-[11px] text-amber-300/80 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
-            title="استعادة بنك الأسئلة الافتراضي الأصلي للحقيبة المحددة"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>استعادة البنك الافتراضي للحقيبة</span>
-          </button>
-        </div>
-
-        {/* Main Tab Navigation Header */}
-        <div className="bg-slate-900 px-5 pt-3 pb-0 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 shrink-0">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {/* Top-Level Mode Selector: Bag Tools vs General Platform */}
+        <div className="bg-slate-950 px-5 pt-3 pb-2.5 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-900 rounded-2xl border border-slate-800 w-full sm:w-auto">
             <button
-              onClick={() => setActiveTab('analytics')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'analytics'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                  : 'bg-slate-800/80 text-amber-300 hover:bg-slate-800 hover:text-white border border-amber-500/30'
+              onClick={() => {
+                setNavSection('bag_tools');
+                if (!COURSE_SPECIFIC_TABS.includes(activeTab)) {
+                  setActiveTab('unit_progress_reports');
+                }
+              }}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-quran transition-all cursor-pointer ${
+                navSection === 'bag_tools'
+                  ? 'bg-gradient-to-r from-emerald-800 to-slate-900 text-amber-300 shadow-md border border-amber-400/40 font-extrabold'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <BarChart3 className="w-4 h-4 text-amber-400" />
-              <span>📊 لوحة الإحصائيات والتحليلات البيانية</span>
+              <Briefcase className="w-4 h-4 text-amber-400" />
+              <span>🎒 أدوات ومحتوى الحقائب التعليمية</span>
+              <span className="text-[10px] bg-amber-400/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono">
+                {allCourses.length}
+              </span>
             </button>
 
             <button
-              onClick={() => setActiveTab('submissions')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'submissions'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
-                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
+              onClick={() => {
+                setNavSection('general_tools');
+                if (COURSE_SPECIFIC_TABS.includes(activeTab)) {
+                  setActiveTab('submissions');
+                }
+              }}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-quran transition-all cursor-pointer ${
+                navSection === 'general_tools'
+                  ? 'bg-gradient-to-r from-emerald-800 to-slate-900 text-amber-300 shadow-md border border-amber-400/40 font-extrabold'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <Award className="w-4 h-4" />
-              <span>سجل نتائج وتدريبات الطلاب ({submissions.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('self_reflections')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'self_reflections'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                  : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40'
-              }`}
-            >
-              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-              <span>⭐ التقييم الذاتي لمدى فهم الطلاب</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('teacher_guide')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'teacher_guide'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                  : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40'
-              }`}
-            >
-              <FileText className="w-4 h-4 text-amber-400" />
-              <span>📖 دليل إجابات المعلم (المناقشة والواجبات والتلاوة)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('unit_questions')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'unit_questions'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
-                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <BookOpen className="w-4 h-4" />
-              <span>إدارة أسئلة أبواب الدروس ({availableUnitNumbers.length} أبواب)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('exam_questions')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'exam_questions'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
-                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>إدارة بنك الاختبار الشامل ({comprehensiveQuestions.length} سؤالاً)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('certificate')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'certificate'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                  : 'bg-amber-400/20 text-amber-300 hover:bg-amber-400/30 border border-amber-400/40'
-              }`}
-            >
-              <Palette className="w-4 h-4 text-amber-400" />
-              <span>🎓 تصميم الشهادات</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('bag_management')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'bag_management'
-                  ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-md ring-2 ring-emerald-300'
-                  : 'bg-emerald-950/90 text-emerald-300 hover:bg-emerald-900 border border-emerald-500/40'
-              }`}
-            >
-              <Briefcase className="w-4 h-4 text-emerald-400" />
-              <span>🗂️ إدارة الحقائب والدروس والأسعار</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('institute_themes')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'institute_themes'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                  : 'bg-purple-950/90 text-purple-300 hover:bg-purple-900 border border-purple-500/40'
-              }`}
-            >
-              <Palette className="w-4 h-4 text-purple-300" />
-              <span>🎨 تخصيص واجهات المعاهد والمجموعات</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('students_access')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'students_access'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                  : 'bg-indigo-950/90 text-indigo-300 hover:bg-indigo-900 border border-indigo-500/40'
-              }`}
-            >
-              <Key className="w-4 h-4 text-amber-400" />
-              <span>🔑 صلاحيات وقفل الحقائب للطلاب</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('waitlist')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap relative ${
-                activeTab === 'waitlist'
-                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                  : 'bg-slate-800/90 text-amber-300 hover:bg-slate-800 hover:text-white border border-amber-500/40'
-              }`}
-            >
-              <Users className="w-4 h-4 text-amber-400" />
-              <span>📋 طلبات الانتظار والاشتراكات</span>
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span>🏛️ إدارة المنصة والسجلات العامة</span>
               {pendingWaitlistCount > 0 && (
-                <span className="bg-rose-500 text-white text-[11px] font-mono px-2 py-0.5 rounded-full font-bold animate-pulse shadow">
+                <span className="bg-rose-500 text-white text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold animate-pulse">
                   {pendingWaitlistCount} جديد
                 </span>
               )}
             </button>
+          </div>
 
-            {authRole === 'super_admin' && (
-              <button
-                onClick={() => setActiveTab('trainers')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === 'trainers'
-                    ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md ring-2 ring-amber-300'
-                    : 'bg-emerald-900/90 text-amber-300 hover:bg-emerald-800 hover:text-white border border-amber-400/40'
-                }`}
-              >
-                <Shield className="w-4 h-4 text-amber-400" />
-                <span>👥 إدارة المعلمين وتراخيص المدربين 🔑</span>
-              </button>
-            )}
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-quran w-full sm:w-auto justify-end">
+            <span className="text-amber-300/80 font-bold">الحقيبة المحددة:</span>
+            <span className="bg-slate-900 border border-slate-800 text-slate-200 px-2.5 py-1 rounded-xl font-bold text-[11px]">
+              {currentCourse.shortTitle || currentCourse.title}
+            </span>
           </div>
         </div>
 
+        {/* SECTION 1: BAG-SPECIFIC TOOLS (مقسمة بالحقيبة التعليمية ويظهر تحت كل حقيبة أدواتها ودليل إجاباتها وأسئلتها) */}
+        {navSection === 'bag_tools' && (
+          <div className="bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800 px-5 py-3.5 space-y-3 shrink-0">
+            {/* 1. Bag Selector Row */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-amber-300 font-bold font-quran flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>اختر الحقيبة التعليمية لتظهر أدواتها ودليل إجاباتها وأسئلتها مباشرة بالأسفل:</span>
+                </span>
+                <button
+                  onClick={handleResetDefaults}
+                  className="text-[11px] text-slate-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+                  title="استعادة بنك الأسئلة الافتراضي للحقيبة"
+                >
+                  <RotateCcw className="w-3 h-3 text-amber-400" />
+                  <span>استعادة بنك أسئلة الحقيبة</span>
+                </button>
+              </div>
+
+              {/* Cards for each Bag */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+                {allCourses.map((c) => {
+                  const isSelected = selectedCourseId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setSelectedCourseId(c.id);
+                        setCertCourseTab(c.id);
+                        setSelectedUnitNumber(c.units?.[0]?.unitNumber || 1);
+                        if (!COURSE_SPECIFIC_TABS.includes(activeTab)) {
+                          setActiveTab('unit_progress_reports');
+                        }
+                      }}
+                      className={`relative p-3 rounded-2xl text-right transition-all cursor-pointer border flex flex-col justify-between gap-1.5 group ${
+                        isSelected
+                          ? 'bg-gradient-to-br from-emerald-950 via-slate-900 to-emerald-950 text-white border-amber-400 ring-2 ring-amber-400/50 shadow-lg'
+                          : 'bg-slate-950/70 hover:bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xl">{(c as any).icon || '🗂️'}</span>
+                        {isSelected ? (
+                          <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full font-quran shadow-xs animate-fadeIn">
+                            الحقيبة النشطة 👁️
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 font-mono group-hover:text-amber-300/80 transition-colors">
+                            {c.units?.length || 0} أبواب
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <h5 className={`text-xs font-bold font-quran leading-tight truncate ${isSelected ? 'text-amber-300 font-black' : 'text-slate-200'}`}>
+                          {c.shortTitle || c.title}
+                        </h5>
+                        {isSelected && (
+                          <span className="text-[10px] text-emerald-400 font-mono block mt-0.5">
+                            {c.units?.length || 0} أبواب تعليمية
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. Dedicated Sub-tools Drawer (تطلع مباشرة تحت الحقيبة المحددة) */}
+            <div className="bg-slate-950/90 border border-emerald-900/60 rounded-2xl p-2.5 shadow-inner">
+              <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-800/80 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                  <span className="font-bold text-amber-300 font-quran text-xs">
+                    أدوات ومحتويات حقيبة ({currentCourse.shortTitle || currentCourse.title}):
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                  اضغط على أي أداة لفتحها لهذه الحقيبة
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                {/* 1. التقارير البيانية لتقدم الأبواب (القسم الجديد) */}
+                <button
+                  onClick={() => setActiveTab('unit_progress_reports')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'unit_progress_reports'
+                      ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>📈 تقارير الأبواب البيانية</span>
+                  <span className="bg-emerald-700 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                    جديد
+                  </span>
+                </button>
+
+                {/* 2. دليل إجابات المعلم */}
+                <button
+                  onClick={() => setActiveTab('teacher_guide')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'teacher_guide'
+                      ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  <span>📖 دليل إجابات المعلم</span>
+                </button>
+
+                {/* 3. أسئلة أبواب الدروس */}
+                <button
+                  onClick={() => setActiveTab('unit_questions')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'unit_questions'
+                      ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>❓ إدارة أسئلة الأبواب ({availableUnitNumbers.length})</span>
+                </button>
+
+                {/* 4. بنك الاختبار الشامل */}
+                <button
+                  onClick={() => setActiveTab('exam_questions')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'exam_questions'
+                      ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 text-amber-400" />
+                  <span>📝 بنك الاختبار الشامل</span>
+                </button>
+
+                {/* 5. تصميم الشهادة */}
+                <button
+                  onClick={() => setActiveTab('certificate')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'certificate'
+                      ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <Palette className="w-3.5 h-3.5 text-amber-400" />
+                  <span>🎓 قالَب الشهادة</span>
+                </button>
+
+                {/* 6. صلاحيات وقفل الحقيبة للطلاب */}
+                <button
+                  onClick={() => setActiveTab('students_access')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'students_access'
+                      ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
+                      : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>🔑 صلاحيات الطلاب</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 2: GENERAL PLATFORM TOOLS (السجلات العامة والإحصائيات والاشتراكات) */}
+        {navSection === 'general_tools' && (
+          <div className="bg-slate-900 border-b border-slate-800 px-5 py-3 shrink-0">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {/* Submissions */}
+              <button
+                onClick={() => setActiveTab('submissions')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'submissions'
+                    ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                    : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Award className="w-4 h-4 text-amber-400" />
+                <span>🏆 سجل نتائج وتدريبات الطلاب ({submissions.length})</span>
+              </button>
+
+              {/* Analytics */}
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'analytics'
+                    ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                    : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 text-amber-400" />
+                <span>📊 لوحة الإحصائيات العامة</span>
+              </button>
+
+              {/* Self Reflections */}
+              <button
+                onClick={() => setActiveTab('self_reflections')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'self_reflections'
+                    ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                    : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                <span>⭐ التقييم الذاتي لمدى الفهم</span>
+              </button>
+
+              {/* Bag Management */}
+              <button
+                onClick={() => setActiveTab('bag_management')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'bag_management'
+                    ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-md'
+                    : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Briefcase className="w-4 h-4 text-emerald-400" />
+                <span>🗂️ إدارة كافة الحقائب والأسعار</span>
+              </button>
+
+              {/* Waitlist */}
+              <button
+                onClick={() => setActiveTab('waitlist')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 relative ${
+                  activeTab === 'waitlist'
+                    ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                    : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Users className="w-4 h-4 text-amber-400" />
+                <span>📋 طلبات الانتظار والاشتراكات</span>
+                {pendingWaitlistCount > 0 && (
+                  <span className="bg-rose-500 text-white text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold animate-pulse">
+                    {pendingWaitlistCount} جديد
+                  </span>
+                )}
+              </button>
+
+              {/* Themes */}
+              <button
+                onClick={() => setActiveTab('institute_themes')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'institute_themes'
+                    ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                    : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <Palette className="w-4 h-4 text-purple-300" />
+                <span>🎨 سمات المعاهد والمجموعات</span>
+              </button>
+
+              {/* Platform Identity & Logo (مدارج) */}
+              <button
+                onClick={() => setActiveTab('platform_identity')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'platform_identity'
+                    ? 'bg-gradient-to-r from-amber-400 to-amber-300 text-slate-950 font-black shadow-md ring-2 ring-amber-400/50'
+                    : 'bg-slate-950/80 text-amber-300 hover:text-amber-100 hover:bg-slate-800 border border-amber-500/30'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>🏛️ هوية المنصة والشعار والواجهة (مدارج)</span>
+                <span className="bg-amber-400/20 text-amber-300 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                  جديد
+                </span>
+              </button>
+
+              {/* Trainers (for super admin) */}
+              {authRole === 'super_admin' && (
+                <button
+                  onClick={() => setActiveTab('trainers')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold font-quran transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                    activeTab === 'trainers'
+                      ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+                      : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  <span>👥 إدارة المعلمين وتراخيص المدربين</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Dynamic Content Views */}
         <div className="p-5 overflow-y-auto flex-1 space-y-6">
+
+          {/* Bag Context Breadcrumb (إذا كان المعلم يتصفح أدوات حقيبة معينة) */}
+          {COURSE_SPECIFIC_TABS.includes(activeTab) && (
+            <div className="bg-gradient-to-r from-emerald-50 via-slate-50 to-amber-50/40 border border-emerald-200/70 rounded-2xl px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2.5 shadow-2xs font-tajawal">
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                <span className="text-slate-500 font-bold font-quran">أنت تتصفح حالياً:</span>
+                <span className="bg-emerald-950 text-amber-300 font-bold px-2.5 py-1 rounded-xl text-xs font-quran flex items-center gap-1.5 shadow-xs">
+                  <span>{(currentCourse as any).icon || '🗂️'}</span>
+                  <span>{currentCourse.title}</span>
+                </span>
+                <span className="text-slate-400 font-bold">←</span>
+                <span className="bg-amber-400 text-slate-950 font-black px-2.5 py-1 rounded-xl text-xs font-quran shadow-xs">
+                  {activeTab === 'unit_progress_reports' && '📈 التقارير البيانية لتقدم الأبواب'}
+                  {activeTab === 'teacher_guide' && '📖 دليل إجابات وشرح المعلم'}
+                  {activeTab === 'unit_questions' && '❓ إدارة أسئلة الأبواب'}
+                  {activeTab === 'exam_questions' && '📝 بنك الاختبار الشامل'}
+                  {activeTab === 'certificate' && '🎓 قالب وتصميم الشهادة'}
+                  {activeTab === 'students_access' && '🔑 صلاحيات وصول وقفل الحقيبة'}
+                </span>
+              </div>
+
+              {/* Quick Bag Switcher */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-500 text-[11px] font-bold font-quran hidden lg:inline">تبديل سريع للحقيبة:</span>
+                <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-0.5">
+                  {allCourses.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setSelectedCourseId(c.id);
+                        setCertCourseTab(c.id);
+                        setSelectedUnitNumber(c.units?.[0]?.unitNumber || 1);
+                      }}
+                      title={c.title}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-quran transition-all cursor-pointer whitespace-nowrap ${
+                        selectedCourseId === c.id
+                          ? 'bg-emerald-800 text-amber-300 font-black shadow-xs ring-1 ring-amber-400'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      {(c as any).icon || '🗂️'} {c.shortTitle || c.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: UNIT PROGRESS REPORTS (تقارير الأبواب البيانية للحقيبة التعليمية) */}
+          {activeTab === 'unit_progress_reports' && (
+            <TeacherUnitProgressReports
+              activeCourseId={selectedCourseId}
+              onSelectCourse={(id) => {
+                setSelectedCourseId(id);
+                setCertCourseTab(id);
+                const c = getCourseById(id);
+                setSelectedUnitNumber(c.units?.[0]?.unitNumber || 1);
+              }}
+              onNavigateToUnitQuestions={(uNum) => {
+                setSelectedUnitNumber(uNum);
+                setActiveTab('unit_questions');
+              }}
+            />
+          )}
 
           {/* TAB 0: ANALYTICS & STATISTICAL DASHBOARD */}
           {activeTab === 'analytics' && (
@@ -877,9 +1250,53 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
                       className="bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>مسح السجلات</span>
+                      <span>مسح الكل</span>
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Deletion Success Toast Message */}
+              {submissionDeleteMsg && (
+                <div className="p-3 bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold rounded-xl flex items-center gap-2 animate-fadeIn font-quran">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{submissionDeleteMsg}</span>
+                </div>
+              )}
+
+              {/* View Mode Switcher: By Student vs Detailed Table */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+                <div className="flex items-center gap-1.5 w-full sm:w-auto bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionsViewMode('by_student')}
+                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold font-quran transition-all cursor-pointer ${
+                      submissionsViewMode === 'by_student'
+                        ? 'bg-emerald-900 text-amber-300 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>سجلات الطلاب (كل طالب على حدة - {studentGroups.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionsViewMode('all_records')}
+                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold font-quran transition-all cursor-pointer ${
+                      submissionsViewMode === 'all_records'
+                        ? 'bg-emerald-900 text-amber-300 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>جدول الاختبارات التفصيلي ({filteredSubmissions.length})</span>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-slate-500 font-quran flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>إجمالي المحاولات: <strong className="text-slate-800 font-mono">{filteredSubmissions.length}</strong> في <strong className="text-slate-800 font-mono">{studentGroups.length}</strong> طلاب</span>
                 </div>
               </div>
 
@@ -899,70 +1316,395 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* Submissions Table */}
-              {filteredSubmissions.length > 0 ? (
-                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                  <table className="w-full text-right text-xs text-slate-800">
-                    <thead className="bg-slate-100 text-slate-900 font-bold font-quran border-b border-slate-200">
-                      <tr>
-                        <th className="p-3">#</th>
-                        <th className="p-3">اسم الطالب</th>
-                        <th className="p-3">المعلم المشرف</th>
-                        <th className="p-3">اسم الاختبار / الوحدة</th>
-                        <th className="p-3">نوع النشاط</th>
-                        <th className="p-3">النتيجة والنسبة</th>
-                        <th className="p-3">تاريخ الإنجاز</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredSubmissions.map((item, idx) => (
-                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 font-bold text-slate-400">{idx + 1}</td>
-                          <td className="p-3 font-bold font-quran text-emerald-950 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                            {item.studentName}
-                          </td>
-                          <td className="p-3">
-                            {item.trainerName ? (
-                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-2 py-0.5 rounded-lg text-[11px] font-quran">
-                                {item.trainerName}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 text-[11px]">عام (المنصة)</span>
-                            )}
-                          </td>
-                          <td className="p-3 font-medium text-slate-800">{item.unitTitle}</td>
-                          <td className="p-3">
-                            <span className="bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full text-[11px]">
-                              {item.testType}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-black font-quran px-2 py-0.5 rounded-lg text-xs ${
-                                item.percentage >= 80 
-                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
-                                  : item.percentage >= 50 
-                                  ? 'bg-amber-100 text-amber-900 border border-amber-300' 
-                                  : 'bg-rose-100 text-rose-900 border border-rose-300'
-                              }`}>
-                                {item.score} / {item.totalQuestions} ({item.percentage}%)
-                              </span>
+              {/* VIEW 1: BY STUDENT (كل طالب على حدة) */}
+              {submissionsViewMode === 'by_student' && (
+                <div className="space-y-3">
+                  {studentGroups.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-3">
+                      {studentGroups.map((student) => {
+                        const isExpanded = !!expandedStudents[student.studentName];
+                        return (
+                          <div
+                            key={student.studentName}
+                            className="bg-white border border-slate-200 hover:border-emerald-300 rounded-2xl p-4 shadow-xs transition-all space-y-3"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              {/* Student Info */}
+                              <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-800 to-slate-900 text-amber-300 font-bold font-quran text-lg flex items-center justify-center shrink-0 shadow-sm">
+                                  {student.studentName.charAt(0) || 'ط'}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="text-sm font-bold font-quran text-slate-900">
+                                      {student.studentName}
+                                    </h4>
+                                    {student.trainerName ? (
+                                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full font-quran">
+                                        المعلم: {student.trainerName}
+                                      </span>
+                                    ) : (
+                                      <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                        عام (المنصة)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1 flex-wrap">
+                                    <span>إجمالي التدريبات: <strong className="text-slate-800 font-mono">{student.totalTests}</strong></span>
+                                    <span>•</span>
+                                    <span>متوسط الدرجات: <strong className={`font-bold font-mono ${student.avgPercentage >= 80 ? 'text-emerald-700' : student.avgPercentage >= 50 ? 'text-amber-700' : 'text-rose-700'}`}>{student.avgPercentage}%</strong></span>
+                                    <span>•</span>
+                                    <span>آخر نشاط: <strong className="text-slate-700 font-sans">{student.lastDate}</strong></span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Student Actions */}
+                              <div className="flex items-center gap-2 self-end sm:self-center">
+                                {/* Delete Student Log Button (علامة حذف سجل الطالب كل طالب على حدة) */}
+                                <button
+                                  type="button"
+                                  onClick={() => setStudentToDelete({
+                                    studentName: student.studentName,
+                                    count: student.totalTests
+                                  })}
+                                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-900 border border-rose-200 text-xs font-bold font-quran transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                  title={`حذف كامل سجل نتائج وتدريبات الطالب ${student.studentName}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                  <span>حذف سجل الطالب</span>
+                                </button>
+
+                                {/* Toggle details */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleStudentExpanded(student.studentName)}
+                                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold font-quran transition-all flex items-center gap-1 cursor-pointer"
+                                >
+                                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  <span>{isExpanded ? 'إخفاء التفاصيل' : `عرض التدريبات (${student.totalTests})`}</span>
+                                </button>
+                              </div>
                             </div>
-                          </td>
-                          <td className="p-3 text-slate-500 font-sans text-[11px]">{item.date}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                            {/* Expanded Tests Sub-list */}
+                            {isExpanded && (
+                              <div className="border-t border-slate-100 pt-3 space-y-2">
+                                <div className="text-[11px] font-bold text-slate-600 font-quran flex items-center justify-between">
+                                  <span>قائمة تدريبات واختبارات الطالب:</span>
+                                  <span className="text-slate-400 font-mono text-[10px]">{student.submissions.length} محاولة مسجلة</span>
+                                </div>
+                                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                                  <table className="w-full text-right text-xs">
+                                    <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                                      <tr>
+                                        <th className="p-2.5">اسم الاختبار / الوحدة</th>
+                                        <th className="p-2.5">النوع</th>
+                                        <th className="p-2.5">النتيجة</th>
+                                        <th className="p-2.5">التاريخ</th>
+                                        <th className="p-2.5 text-center">حذف المحاولة</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {student.submissions.map((sub) => (
+                                        <tr key={sub.id} className="hover:bg-slate-50/70">
+                                          <td className="p-2.5 font-medium text-slate-900">{sub.unitTitle}</td>
+                                          <td className="p-2.5">
+                                            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                                              {sub.testType}
+                                            </span>
+                                          </td>
+                                          <td className="p-2.5">
+                                            <span className={`font-bold font-mono px-2 py-0.5 rounded text-[11px] ${
+                                              sub.percentage >= 80 ? 'bg-emerald-100 text-emerald-800' :
+                                              sub.percentage >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                                            }`}>
+                                              {sub.score} / {sub.totalQuestions} ({sub.percentage}%)
+                                            </span>
+                                          </td>
+                                          <td className="p-2.5 text-slate-500 font-sans text-[11px]">{sub.date}</td>
+                                          <td className="p-2.5 text-center">
+                                            <button
+                                              type="button"
+                                              onClick={() => setDeleteSubmissionTarget(sub)}
+                                              className="p-1 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                                              title={`حذف هذه النتيجة فقط`}
+                                            >
+                                              <Trash2 className="w-3 h-3 text-rose-600" />
+                                              <span>حذف</span>
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-300 space-y-3">
+                      <Award className="w-12 h-12 text-slate-300 mx-auto" />
+                      <h3 className="text-base font-bold font-quran text-slate-700">لا توجد سجلات نتائج للطلاب مطابقة للبحث</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                        عندما يجيب الطلاب على تدريبات المنصة، ستظهر ملفات الطلاب وسجلاتهم هنا مع إمكانية حذف سجل أي طالب بشكل مستقل.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-3">
-                  <Award className="w-12 h-12 text-slate-300 mx-auto" />
-                  <h3 className="text-base font-bold font-quran text-slate-700">لا توجد تسليكات أو نتائج مطابقة للبحث</h3>
-                  <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                    عندما يجيب الطلاب على الاختبارات والتدريبات التفاعلية، ستظهر درجاتهم وتفاصيل حلولهم مصنفة حسب المعلم المشرف هنا.
-                  </p>
+              )}
+
+              {/* VIEW 2: ALL RECORDS TABLE (كافة النتائج بالتفصيل) */}
+              {submissionsViewMode === 'all_records' && (
+                <div>
+                  {filteredSubmissions.length > 0 ? (
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white">
+                      <table className="w-full text-right text-xs text-slate-800">
+                        <thead className="bg-slate-100 text-slate-900 font-bold font-quran border-b border-slate-200">
+                          <tr>
+                            <th className="p-3">#</th>
+                            <th className="p-3">اسم الطالب</th>
+                            <th className="p-3">المعلم المشرف</th>
+                            <th className="p-3">اسم الاختبار / الوحدة</th>
+                            <th className="p-3">نوع النشاط</th>
+                            <th className="p-3">النتيجة والنسبة</th>
+                            <th className="p-3">تاريخ الإنجاز</th>
+                            <th className="p-3 text-center">إجراءات الحذف</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredSubmissions.map((item, idx) => (
+                            <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-3 font-bold text-slate-400">{idx + 1}</td>
+                              <td className="p-3 font-bold font-quran text-emerald-950">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                                  <span>{item.studentName}</span>
+                                  {/* Quick Delete Student Log Mark */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setStudentToDelete({
+                                      studentName: item.studentName,
+                                      count: submissions.filter((s) => (s.studentName || '').trim() === (item.studentName || '').trim()).length
+                                    })}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                                    title={`علامة حذف سجل الطالب (${item.studentName}) بالكامل`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                {item.trainerName ? (
+                                  <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-2 py-0.5 rounded-lg text-[11px] font-quran">
+                                    {item.trainerName}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-[11px]">عام (المنصة)</span>
+                                )}
+                              </td>
+                              <td className="p-3 font-medium text-slate-800">{item.unitTitle}</td>
+                              <td className="p-3">
+                                <span className="bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full text-[11px]">
+                                  {item.testType}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-black font-quran px-2 py-0.5 rounded-lg text-xs ${
+                                    item.percentage >= 80 
+                                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
+                                      : item.percentage >= 50 
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                                      : 'bg-rose-100 text-rose-900 border border-rose-300'
+                                  }`}>
+                                    {item.score} / {item.totalQuestions} ({item.percentage}%)
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-3 text-slate-500 font-sans text-[11px]">{item.date}</td>
+                              <td className="p-3 text-center whitespace-nowrap">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteSubmissionTarget(item)}
+                                    className="p-1 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-all cursor-pointer inline-flex items-center gap-1 font-quran font-bold text-[11px]"
+                                    title="حذف نتيجة هذا الاختبار فقط"
+                                  >
+                                    <Trash2 className="w-3 h-3 text-rose-600" />
+                                    <span>حذف النتيجة</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setStudentToDelete({
+                                      studentName: item.studentName,
+                                      count: submissions.filter((s) => (s.studentName || '').trim() === (item.studentName || '').trim()).length
+                                    })}
+                                    className="p-1 px-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-rose-800 hover:text-rose-900 border border-slate-200 hover:border-rose-300 transition-all cursor-pointer inline-flex items-center gap-1 font-quran font-bold text-[11px]"
+                                    title={`حذف كامل سجل الطالب ${item.studentName}`}
+                                  >
+                                    <UserX className="w-3 h-3 text-rose-600" />
+                                    <span>سجل الطالب</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-3">
+                      <Award className="w-12 h-12 text-slate-300 mx-auto" />
+                      <h3 className="text-base font-bold font-quran text-slate-700">لا توجد تسليمات أو نتائج مطابقة للبحث</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                        عندما يجيب الطلاب على الاختبارات والتدريبات التفاعلية، ستظهر درجاتهم وتفاصيل حلولهم مصنفة حسب المعلم المشرف هنا.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Dedicated Individual Student Log Delete Confirmation Modal (كل طالب على حدة) */}
+              {studentToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+                  <div className="bg-white border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 text-right space-y-4 shadow-2xl relative font-tajawal">
+                    <button
+                      onClick={() => setStudentToDelete(null)}
+                      className="absolute top-4 left-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-300 flex items-center justify-center shrink-0 text-rose-600">
+                        <Trash2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black font-quran text-slate-900">
+                          تأكيد حذف سجل الطالب بالكامل
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          حذف سجل الطالب كل طالب على حدة
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-rose-50/70 border border-rose-200 p-4 rounded-2xl space-y-2 text-xs text-slate-800">
+                      <div className="flex items-center justify-between border-b border-rose-200/60 pb-2">
+                        <span className="font-bold text-slate-600">اسم الطالب:</span>
+                        <span className="font-bold font-quran text-rose-950 text-base">{studentToDelete.studentName}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-600">عدد التدريبات والاختبارات المسجلة:</span>
+                        <span className="font-bold text-rose-700 font-mono text-sm">{studentToDelete.count} سجلات</span>
+                      </div>
+                      <p className="text-[11px] text-rose-800 font-medium pt-1 leading-relaxed">
+                        ⚠️ تنبيه: سيتم حذف كافة نتائج وتدريبات هذا الطالب فقط بشكل نهائي دون التأثير على نتائج أو سجلات باقي الطلاب.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      <button
+                        type="button"
+                        disabled={isDeletingSubmission}
+                        onClick={handleDeleteStudentAllConfirm}
+                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+                      >
+                        {isDeletingSubmission ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        <span>نعم، حذف كامل سجل الطالب ({studentToDelete.studentName}) نهائياً</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStudentToDelete(null)}
+                        className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                      >
+                        إلغاء التراجع
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Single Submission Delete Confirmation Modal */}
+              {deleteSubmissionTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+                  <div className="bg-white border-2 border-rose-400 rounded-3xl max-w-md w-full p-6 text-right space-y-4 shadow-2xl relative font-tajawal">
+                    <button
+                      onClick={() => setDeleteSubmissionTarget(null)}
+                      className="absolute top-4 left-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-300 flex items-center justify-center shrink-0 text-rose-600">
+                        <Trash2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black font-quran text-slate-900">
+                          تأكيد حذف نتيجة الاختبار
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          اختر نوع الحذف المطلوب
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl space-y-1.5 text-xs text-slate-700">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-500">الطالب:</span>
+                        <span className="font-bold font-quran text-slate-900 text-sm">{deleteSubmissionTarget.studentName}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-500">اسم الاختبار:</span>
+                        <span className="font-bold text-slate-800">{deleteSubmissionTarget.unitTitle}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-500">النتيجة:</span>
+                        <span className="font-bold text-emerald-700">{deleteSubmissionTarget.score} / {deleteSubmissionTarget.totalQuestions} ({deleteSubmissionTarget.percentage}%)</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-500">التاريخ:</span>
+                        <span className="text-slate-500 font-sans">{deleteSubmissionTarget.date}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      <button
+                        type="button"
+                        disabled={isDeletingSubmission}
+                        onClick={() => handleDeleteSubmissionConfirm(false)}
+                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>حذف هذه النتيجة فقط من السجل</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isDeletingSubmission}
+                        onClick={() => handleDeleteSubmissionConfirm(true)}
+                        className="w-full bg-slate-100 hover:bg-rose-50 text-rose-800 hover:text-rose-900 border border-rose-300 font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <UserCheck className="w-4 h-4" />
+                        <span>حذف كافة نتائج وسجلات الطالب ({deleteSubmissionTarget.studentName}) بالكامل 🗑️</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDeleteSubmissionTarget(null)}
+                        className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                      >
+                        إلغاء التراجع
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1713,6 +2455,11 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
             <TeacherWaitlistPanel
               activeCourseId={selectedCourseId}
             />
+          )}
+
+          {/* TAB: PLATFORM IDENTITY & LOGO (مدارج) */}
+          {activeTab === 'platform_identity' && (
+            <PlatformIdentityPanel />
           )}
 
         </div>

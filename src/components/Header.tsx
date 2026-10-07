@@ -5,11 +5,12 @@ import { isCourseUnlocked } from '../utils/studentProgressStorage';
 import { 
   Menu, X, BookOpen, Trophy, Moon, Sun, Search, Share2, 
   LogOut, Settings, Briefcase, Type, Award, ChevronDown, 
-  Grid, ShieldCheck, Lock, Users
+  Grid, ShieldCheck, Lock, Users, Sparkles, Palette
 } from 'lucide-react';
 import { WhatsAppSupport } from './WhatsAppSupport';
 import { getActiveThemeForStudent, subscribeGroupThemes } from '../utils/groupThemeStorage';
 import { getStudentProfile, subscribeStudentProfile } from '../utils/studentStorage';
+import { getHomeConfig, subscribeHomeConfig, HomeConfig } from '../utils/homeConfigStorage';
 import { InstituteLogo } from './InstituteLogo';
 
 interface HeaderProps {
@@ -72,6 +73,15 @@ export const Header: React.FC<HeaderProps> = ({
 
   const courseDropdownRef = useRef<HTMLDivElement>(null);
   const toolsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [homeConfig, setHomeConfig] = useState<HomeConfig>(() => getHomeConfig());
+
+  useEffect(() => {
+    const unsubHome = subscribeHomeConfig((cfg) => {
+      setHomeConfig(cfg);
+    });
+    return () => unsubHome();
+  }, []);
 
   const [activeTheme, setActiveTheme] = useState<GroupThemeConfig | null>(() => {
     return getActiveThemeForStudent(getStudentProfile()?.group);
@@ -151,14 +161,47 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Platform Home Button */}
+            {/* Platform Brand: شعار وهُوية منصة مدارج */}
             <button
               onClick={onReturnToHome}
-              className="text-slate-400 hover:text-white hover:bg-slate-900 p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer font-tajawal"
-              title="العودة لشاشة الحقائب الرئيسية"
+              className="flex items-center gap-2.5 p-1 sm:px-2.5 py-1 rounded-2xl hover:bg-slate-900/90 transition-all cursor-pointer group text-right border border-slate-800/80 hover:border-amber-400/40 bg-slate-950/60 shadow-xs"
+              title="منصة مدارج - العودة للرئيسية وتصفح الحقائب"
             >
-              <Grid className="w-4 h-4 text-slate-400" />
-              <span className="hidden sm:inline font-bold">المنصة</span>
+              {/* Logo / Sacred Calligraphy Emblem */}
+              <div className="relative shrink-0 flex items-center justify-center">
+                {homeConfig.platformLogoUrl && homeConfig.platformLogoUrl.trim() ? (
+                  <img
+                    src={homeConfig.platformLogoUrl.trim()}
+                    alt={homeConfig.platformName || 'شعار منصة مدارج'}
+                    className="w-8 h-8 sm:w-9 sm:h-9 object-contain rounded-xl p-0.5 drop-shadow-md border border-amber-400/60 bg-slate-900 ring-1 ring-amber-400/20"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-amber-400 via-emerald-800 to-slate-950 flex items-center justify-center text-white shadow-md border border-amber-400/50 group-hover:scale-105 group-hover:border-amber-300 transition-all relative overflow-hidden">
+                    <span className="font-quran font-black text-amber-200 text-sm drop-shadow-sm select-none">
+                      مـ
+                    </span>
+                    <Sparkles className="w-2.5 h-2.5 text-amber-300 absolute -top-0.5 -right-0.5 animate-pulse" />
+                  </div>
+                )}
+              </div>
+
+              {/* Platform Title */}
+              <div className="flex flex-col justify-center leading-tight">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base sm:text-lg font-black font-quran bg-gradient-to-l from-amber-200 via-amber-300 to-emerald-300 bg-clip-text text-transparent group-hover:from-amber-100 group-hover:to-white transition-colors tracking-wide">
+                    {homeConfig.platformName || 'مدارج'}
+                  </span>
+                  <span className="text-[10px] bg-gradient-to-r from-amber-500/20 to-emerald-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.2 rounded-md font-quran font-bold hidden sm:inline shadow-2xs">
+                    علوم التجويد
+                  </span>
+                </div>
+                <span className="text-[9px] text-slate-400 font-tajawal hidden md:block">
+                  المنصة التعليمية المتكاملة
+                </span>
+              </div>
             </button>
 
             <span className="hidden sm:inline text-slate-700" aria-hidden="true">|</span>
@@ -171,9 +214,9 @@ export const Header: React.FC<HeaderProps> = ({
                   className="text-right hover:bg-slate-900 p-1 sm:px-2 py-1 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
                   title="التبديل بين الحقائب"
                 >
-                  <div className="max-w-[140px] sm:max-w-[220px] md:max-w-xs truncate">
+                  <div className="max-w-[130px] sm:max-w-[200px] md:max-w-xs truncate">
                     <span className="text-xs sm:text-sm font-bold font-quran text-slate-100 truncate block">
-                      {isHome ? 'منصة دروس التجويد' : (activeCourse.shortTitle || activeCourse.title)}
+                      {isHome ? 'كافة الحقائب والمناهج' : (activeCourse.shortTitle || activeCourse.title)}
                     </span>
                   </div>
                   <ChevronDown className="w-3 h-3 text-slate-500 shrink-0" />
@@ -344,6 +387,17 @@ export const Header: React.FC<HeaderProps> = ({
 
                   {isTeacherMode ? (
                     <>
+                      <button
+                        onClick={() => {
+                          setShowToolsDropdown(false);
+                          onOpenTeacherDashboard();
+                        }}
+                        className="w-full text-right px-3 py-2 rounded-lg text-xs text-amber-300 hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-800"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>🎨 هوية وشعار منصة مدارج (رفع اللوجو)</span>
+                      </button>
+
                       {onOpenBagManagement && (
                         <button
                           onClick={() => {

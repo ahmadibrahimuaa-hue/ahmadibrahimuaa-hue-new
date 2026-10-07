@@ -8,7 +8,7 @@ import {
   StudentNote, getStudentNotes, saveStudentNote, 
   deleteStudentNote, togglePinStudentNote, subscribeStudentNotes 
 } from '../utils/studentNotesStorage';
-import { ALL_COURSES, getCourseById } from '../data/courses';
+import { getAllCourses, getCourseById } from '../data/courses';
 
 interface StudentNotesDrawerProps {
   isOpen: boolean;
@@ -64,7 +64,8 @@ export const StudentNotesDrawer: React.FC<StudentNotesDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const currentCourseObj = getCourseById(formCourseId) || ALL_COURSES[0];
+  const allCourses = getAllCourses();
+  const currentCourseObj = getCourseById(formCourseId) || allCourses[0];
 
   const handleStartCreate = () => {
     setEditingNoteId(null);
@@ -239,7 +240,7 @@ export const StudentNotesDrawer: React.FC<StudentNotesDrawerProps> = ({
                     onChange={(e) => setFormCourseId(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 font-quran focus:border-amber-400 focus:outline-none"
                   >
-                    {ALL_COURSES.map((c) => (
+                    {allCourses.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.title}
                       </option>
@@ -411,7 +412,7 @@ export const StudentNotesDrawer: React.FC<StudentNotesDrawerProps> = ({
                 >
                   الكل ({notes.length})
                 </button>
-                {ALL_COURSES.map((c) => (
+                {allCourses.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => setFilterCourse(c.id)}

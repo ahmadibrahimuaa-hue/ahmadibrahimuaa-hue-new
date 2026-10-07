@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { 
   X, Check, Save, RotateCcw, Sparkles, BookOpen, AlertCircle, 
-  Layers, Eye, EyeOff, Layout, Megaphone, Star, ShieldCheck, ChevronRight
+  Layers, Eye, EyeOff, Layout, Megaphone, Star, ShieldCheck, ChevronRight,
+  Upload, Image as ImageIcon, Trash2
 } from 'lucide-react';
 import { HomeConfig, HomeCurriculumItemConfig, HomeAnnouncementType, HomeDefaultView } from '../utils/homeConfigStorage';
 import { Course, CourseLevel } from '../types';
+import { compressImage } from '../utils/imageCompressor';
 
 interface HomeCustomizerModalProps {
   isOpen: boolean;
@@ -171,13 +173,133 @@ export const HomeCustomizerModal: React.FC<HomeCustomizerModalProps> = ({
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1 text-xs sm:text-sm">
           
-          {/* TAB 1: GENERAL HEADERS */}
+          {/* TAB 1: GENERAL HEADERS & PLATFORM IDENTITY */}
           {activeSubTab === 'general' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 leading-relaxed">
-                💡 <strong className="text-slate-200">ملاحظة للمعلم:</strong> التعديلات هنا تظهر فوراً في ترويسة الصفحة الرئيسية لكل الطلاب والزائرين.
+                💡 <strong className="text-slate-200">ملاحظة للمعلم:</strong> التعديلات هنا تظهر فوراً في ترويسة المنصة وشريط الهيدر والصفحة الرئيسية لكل الطلاب والزائرين بالتزامن السحابي.
               </div>
 
+              {/* 1. Platform Brand & Logo Section */}
+              <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <h3 className="font-bold font-quran text-amber-200 text-sm sm:text-base">
+                      الهوية البصرية وشعار المنصة (مدارج)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800">
+                    مباشر في الهيدر والواجهة
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Platform Name */}
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-200 text-xs sm:text-sm">
+                      اسم المنصة الرئيسي:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.platformName || 'مدارج'}
+                      onChange={(e) => setFormData({ ...formData, platformName: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-amber-300 font-quran font-black text-sm outline-none transition-colors"
+                      placeholder="مدارج"
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      يظهر هذا الاسم بجوار الشعار في أعلى شريط الترويسة وجميع الصفحات.
+                    </p>
+                  </div>
+
+                  {/* Platform Slogan */}
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-200 text-xs sm:text-sm">
+                      الشعار النصي للمنصة:
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.platformSlogan || ''}
+                      onChange={(e) => setFormData({ ...formData, platformSlogan: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-slate-100 font-tajawal text-xs sm:text-sm outline-none transition-colors"
+                      placeholder="منصة مدارج لعلوم التجويد والقرآن الكريم"
+                    />
+                  </div>
+                </div>
+
+                {/* Logo Upload Box */}
+                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                  <label className="block font-bold text-slate-300 text-xs">
+                    شعار المنصة (صورة الشعار):
+                  </label>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    {/* Live Preview */}
+                    <div className="w-16 h-16 rounded-2xl bg-slate-950 border-2 border-amber-400/40 p-1 flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
+                      {formData.platformLogoUrl && formData.platformLogoUrl.trim() ? (
+                        <img
+                          src={formData.platformLogoUrl}
+                          alt="شعار المنصة"
+                          className="w-full h-full object-contain rounded-xl"
+                        />
+                      ) : (
+                        <div className="text-center">
+                          <span className="font-quran font-black text-amber-300 text-xl block leading-none">مـ</span>
+                          <span className="text-[9px] text-slate-500 font-tajawal">افتراضي</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Upload Controls */}
+                    <div className="flex-1 space-y-2 w-full">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-1.5 rounded-xl font-bold font-quran text-xs cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>رفع الشعار من جهازك</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                try {
+                                  const compressed = await compressImage(file, 400);
+                                  setFormData({ ...formData, platformLogoUrl: compressed });
+                                } catch (err) {
+                                  console.error('Image compression error:', err);
+                                }
+                              }
+                            }}
+                          />
+                        </label>
+
+                        {formData.platformLogoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, platformLogoUrl: '' })}
+                            className="bg-rose-950/60 hover:bg-rose-900 text-rose-300 px-3 py-1.5 rounded-xl font-bold font-quran text-xs cursor-pointer flex items-center gap-1 border border-rose-800 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>حذف الشعار واستعادة الافتراضي</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Direct URL input */}
+                      <input
+                        type="text"
+                        value={formData.platformLogoUrl || ''}
+                        onChange={(e) => setFormData({ ...formData, platformLogoUrl: e.target.value })}
+                        placeholder="أو الصق رابط صورة الشعار (URL) مباشرة..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-amber-400 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Main Title */}
               <div className="space-y-1.5">
                 <label className="block font-bold text-slate-200">
                   العنوان الرئيسي للمناهج في الصفحة:

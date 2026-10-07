@@ -125,6 +125,16 @@ export const getCustomStoredCourses = (): Course[] => {
       allMerged.unshift(foundationalCourse);
     }
 
+    // If any missing default courses were restored, persist the healed list to localStorage immediately
+    // so any component reading the cache or localStorage gets all courses reliably
+    if (missingDefaults.length > 0 && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(CUSTOM_COURSES_STORAGE_KEY, JSON.stringify(allMerged));
+      } catch {
+        // ignore localStorage errors
+      }
+    }
+
     return allMerged;
   } catch (e) {
     console.warn('Failed to load custom courses from localStorage, falling back to defaults:', e);

@@ -208,7 +208,7 @@ export const QuizView: React.FC = () => {
                   onClick={async () => {
                     setMcqSubmitted(true);
                     const score = calculateMcqScore();
-                    await saveSubmission('اختبار تقييم المستوى', 'اختبار 10 أسئلة اختيار من متعدد', score, MULTIPLE_CHOICE_QUESTIONS.length);
+                    await saveSubmission('اختبار تقييم المستوى', 'اختبار 10 أسئلة اختيار من متعدد', score, MULTIPLE_CHOICE_QUESTIONS.length, false, undefined, undefined, 'sakinan');
                   }}
                   disabled={Object.keys(mcqAnswers).length === 0}
                   className="bg-emerald-900 hover:bg-emerald-800 disabled:opacity-50 text-amber-300 font-bold text-xs py-2.5 px-5 rounded-xl cursor-pointer shadow-md"

@@ -125,11 +125,14 @@ export const subscribeStudentSubmissions = (
             trainerId: data.trainerId || '',
             trainerName: data.trainerName || '',
             examLevel: data.examLevel || undefined,
+            courseId: data.courseId || undefined,
+            unitNumber: data.unitNumber !== undefined ? Number(data.unitNumber) : undefined,
           });
         });
         submissions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         if (typeof window !== 'undefined') {
           localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(submissions));
+          window.dispatchEvent(new CustomEvent('tajweed_submissions_updated'));
         }
         callback(submissions);
       },
@@ -180,6 +183,8 @@ export const getStudentSubmissionsAsync = async (): Promise<StudentSubmission[]>
         trainerId: data.trainerId || '',
         trainerName: data.trainerName || '',
         examLevel: data.examLevel || undefined,
+        courseId: data.courseId || undefined,
+        unitNumber: data.unitNumber !== undefined ? Number(data.unitNumber) : undefined,
       });
     });
 
@@ -202,7 +207,9 @@ export const saveSubmission = async (
   totalQuestions: number,
   isTeacherMode: boolean = false,
   details?: string,
-  examLevel?: ExamDifficultyLevel
+  examLevel?: ExamDifficultyLevel,
+  courseId?: string,
+  unitNumber?: number
 ): Promise<StudentSubmission | null> => {
   // Teachers do NOT register student quiz submissions
   if (isTeacherMode) {
@@ -232,6 +239,8 @@ export const saveSubmission = async (
     trainerName: profile?.trainerName || '',
     ...(details ? { details } : {}),
     ...(examLevel ? { examLevel } : {}),
+    ...(courseId ? { courseId } : {}),
+    ...(unitNumber !== undefined ? { unitNumber } : {}),
   };
 
   const localSubmission: StudentSubmission = {
@@ -243,6 +252,7 @@ export const saveSubmission = async (
   const updated = [localSubmission, ...current];
   if (typeof window !== 'undefined') {
     localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('tajweed_submissions_updated'));
   }
 
   try {
@@ -284,6 +294,7 @@ export const clearStudentProfile = async (): Promise<void> => {
 export const clearAllSubmissions = async (): Promise<void> => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(SUBMISSIONS_KEY);
+    window.dispatchEvent(new CustomEvent('tajweed_submissions_updated'));
   }
 
   try {
@@ -292,6 +303,76 @@ export const clearAllSubmissions = async (): Promise<void> => {
     await Promise.all(deletePromises);
   } catch (err) {
     console.warn('Firestore clearAllSubmissions failed:', err);
+  }
+};
+
+export const normalizeStudentNameForMatch = (name: string): string => {
+  return (name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, '') // remove arabic tashkeel
+    .replace(/[إأآا]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ');
+};
+
+export const deleteSingleSubmission = async (
+  submissionId: string,
+  studentName?: string,
+  timestamp?: number
+): Promise<boolean> => {
+  const current = getStudentSubmissions();
+  const updated = current.filter((s) => s.id !== submissionId);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('tajweed_submissions_updated'));
+  }
+
+  try {
+    await deleteDoc(doc(db, 'submissions', submissionId));
+    return true;
+  } catch (err) {
+    try {
+      if (studentName && timestamp) {
+        const snapshot = await getDocs(collection(db, 'submissions'));
+        const matched = snapshot.docs.find((d) => {
+          const data = d.data();
+          return data.studentName === studentName && data.timestamp === timestamp;
+        });
+        if (matched) {
+          await deleteDoc(doc(db, 'submissions', matched.id));
+        }
+      }
+    } catch (fallbackErr) {
+      console.warn('Firestore fallback delete error:', fallbackErr);
+    }
+    console.warn('Firestore deleteSingleSubmission (deleted locally):', err);
+    return true;
+  }
+};
+
+export const deleteStudentSubmissionsByName = async (studentName: string): Promise<boolean> => {
+  const normTarget = normalizeStudentNameForMatch(studentName);
+  const current = getStudentSubmissions();
+  const updated = current.filter((s) => normalizeStudentNameForMatch(s.studentName || '') !== normTarget);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('tajweed_submissions_updated'));
+  }
+
+  try {
+    const snapshot = await getDocs(collection(db, 'submissions'));
+    const toDelete = snapshot.docs.filter((d) => {
+      const sName = d.data().studentName || '';
+      return normalizeStudentNameForMatch(sName) === normTarget;
+    });
+    const deletePromises = toDelete.map((d) => deleteDoc(doc(db, 'submissions', d.id)));
+    await Promise.all(deletePromises);
+    return true;
+  } catch (err) {
+    console.warn('Firestore deleteStudentSubmissionsByName failed (deleted locally):', err);
+    return true;
   }
 };
 

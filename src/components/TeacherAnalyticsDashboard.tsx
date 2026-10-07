@@ -4,18 +4,17 @@ import {
   BarChart3, PieChart as PieIcon, RefreshCw, Calendar, 
   ShieldCheck, Filter, ArrowUpRight, Clock, Star, Layers, Activity,
   AlertTriangle, HelpCircle, AlertCircle, Sparkles, Search, ChevronDown, 
-  Lightbulb, Check, XCircle
+  Lightbulb, Check, XCircle, Trash2
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
   Legend, CartesianGrid, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line 
 } from 'recharts';
-import { getSubmissionsList, getStudentProfile } from '../utils/studentStorage';
+import { getSubmissionsList, subscribeStudentSubmissions, getStudentProfile, deleteSingleSubmission, deleteStudentSubmissionsByName } from '../utils/studentStorage';
 import { getStudentProgress, calculateProgressPercentage } from '../utils/studentProgressStorage';
 import { getWaitlistEntries, WaitlistEntry } from '../utils/waitlistStorage';
 import { Course, StudentSubmission } from '../types';
-import { SAKINAN_COURSE } from '../data/courses/sakinanCourse';
-import { IDGHAM_COURSE } from '../data/courses/idghamCourse';
+import { getAllCourses, getCourseById } from '../data/courses';
 
 interface TeacherAnalyticsDashboardProps {
   activeCourseId?: string;
@@ -46,8 +45,18 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
 
   useEffect(() => {
     loadData();
+    const unsub = subscribeStudentSubmissions((data) => {
+      setSubmissions(data);
+      setLastRefreshed(new Date());
+    });
     const interval = setInterval(loadData, 10000);
-    return () => clearInterval(interval);
+    const handleSubmissionsUpdated = () => loadData();
+    window.addEventListener('tajweed_submissions_updated', handleSubmissionsUpdated);
+    return () => {
+      unsub();
+      clearInterval(interval);
+      window.removeEventListener('tajweed_submissions_updated', handleSubmissionsUpdated);
+    };
   }, []);
 
   // Diagnostic items data for difficult topics & frequent exam mistakes
@@ -137,6 +146,57 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
       recommendation: 'ربط باب السكتات الواجبة بأحكام الإدغام وعقد جلسة مقارنة بين رواية حفص وروايات القراء الآخرين من أصحاب الإدغام.',
       quranCitation: '{وَقِيلَ مَنْ ۜ رَاقٍ} القيامة: 27',
     },
+    {
+      id: 'dt_6',
+      courseId: 'foundational_rules',
+      courseTitle: 'أصول وقواعد التجويد',
+      unitName: 'الباب الثاني - أحكام النون الساكنة والتنوين',
+      topicTitle: 'التمييز بين الإخفاء الحقيقي والإظهار الحلقي',
+      questionText: 'ما حكم النون الساكنة قبل حرف الغين في قوله تعالى: {فَسَيُنْغِضُونَ إِلَيْكَ رُءُوسَهُمْ} لحفص؟',
+      commonMistake: 'إخفاء بغنة لوقوع النون وسط الكلمة أو توهم أنها من حروف الإخفاء.',
+      correctAnswer: 'إظهار حلقي وجوباً لأن الغين من حروف الحلق الستة (همز فهاء ثم عين حاء مهملتان ثم غين خاء).',
+      errorRate: 36,
+      difficulty: 'high',
+      studentsFailedCount: 14,
+      totalAttempts: 39,
+      diagnosticCause: 'ندرة ورود النون المظهرة عند الغين والخاء في كلمة واحدة، مما يجعل الطالب يميل للإخفاء اعتياداً.',
+      recommendation: 'حصر وتسميع مواضع النون مع الغين والخاء في كلمة واحدة وتكرار نطق {الْمُنْخَنِقَةُ} و{فَسَيُنْغِضُونَ}.',
+      quranCitation: '{فَسَيُنْغِضُونَ إِلَيْكَ رُءُوسَهُمْ} الإسراء: 51',
+    },
+    {
+      id: 'dt_7',
+      courseId: 'makharij',
+      courseTitle: 'مخارج الحروف وصفاتها',
+      unitName: 'الباب الثالث - صفات الحروف التي لا ضد لها',
+      topicTitle: 'تحقيق صفة الاستطالة في حرف الضاد دون قلقلة',
+      questionText: 'ما الفرق الدقيق بين صفة الاستطالة في الضاد وصفة المد في حروف العلة؟',
+      commonMistake: 'اعتبار الاستطالة زيادة في زمن الصوت كحرف المد أو قلقلتها عند السكون.',
+      correctAnswer: 'الاستطالة هي امتداد مخرج الضاد من أول إحدى حافتي اللسان إلى منتهاها، بينما المد هو امتداد الصوت في المخرج المقدر.',
+      errorRate: 41,
+      difficulty: 'high',
+      studentsFailedCount: 16,
+      totalAttempts: 39,
+      diagnosticCause: 'صعوبة ضبط مخرج حافة اللسان مع الأضراس العليا وميل الكثيرين لخلط الضاد بالظاء أو الدال المفخمة.',
+      recommendation: 'استخدام الرسوم التشريحية ثلاثية الأبعاد للمخارج وتدريب الطالب على جريان المخرج لا جريان النفس.',
+      quranCitation: '{وَلا الضَّالِّينَ} الفاتحة: 7',
+    },
+    {
+      id: 'dt_8',
+      courseId: 'ijazah',
+      courseTitle: 'منهاج الإجازة القرآنية',
+      unitName: 'الباب الرابع - تحريرات وتوجيه الروايات',
+      topicTitle: 'تحرير أوجه السكت والإدراج بين السورتين لحفص من طريق الطيبة',
+      questionText: 'ما هي الأوجه الجائزة وصلاً بين سورتي الأنفال والتوبة برواية حفص عن عاصم؟',
+      commonMistake: 'جواز البسملة أو الاقتصار على وجه واحد فقط.',
+      correctAnswer: 'يجوز ثلاثة أوجه بلا بسملة: القطع (الوقف مع التنفس)، والسكت (بلا تنفس)، والوصل بلا سكت.',
+      errorRate: 33,
+      difficulty: 'medium',
+      studentsFailedCount: 12,
+      totalAttempts: 36,
+      diagnosticCause: 'نسيان امتناع البسملة في أول سورة براءة بالإجماع، والخلط بين زمن السكت وزمن الوقف التام.',
+      recommendation: 'إجراء محاكاة أدائية للوصل بين الأنفال وبراءة والتأكيد على حفظ علة سقوط البسملة في التوبة.',
+      quranCitation: '{إِنَّ اللَّهَ بِكُلِّ شَيْءٍ عَلِيمٌ (75) بَرَاءَةٌ مِّنَ اللَّهِ وَرَسُولِهِ}',
+    },
   ];
 
   // Filtered difficult topics
@@ -162,19 +222,24 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
   }, [difficultTopicsData, selectedCourseFilter, mistakeDifficultyFilter, mistakeSearchQuery]);
 
   // Compute Active Students Statistics
+  const allCourses = useMemo(() => getAllCourses(), []);
+
   const analytics = useMemo(() => {
     const rawSubmissions = submissions;
     const progress = getStudentProgress();
     const waitlist = waitlistEntries;
 
-    // Filter submissions by course if needed
+    // Filter submissions dynamically for any selected course
     const filteredSubs = selectedCourseFilter === 'all'
       ? rawSubmissions
       : rawSubmissions.filter((s) => {
+          if (s.courseId) return s.courseId === selectedCourseFilter;
+          const targetCourse = allCourses.find((c) => c.id === selectedCourseFilter);
+          if (!targetCourse) return true;
           const title = (s.unitTitle || (s as any).title || '').toLowerCase();
-          if (selectedCourseFilter === 'sakinan') return title.includes('الساكنين') || title.includes('التقاء');
-          if (selectedCourseFilter === 'idgham') return title.includes('الإدغام') || title.includes('المثلين');
-          return true;
+          const targetTitle = (targetCourse.title || '').toLowerCase();
+          const targetShort = (targetCourse.shortTitle || '').toLowerCase();
+          return (targetShort && title.includes(targetShort)) || (targetTitle && title.includes(targetTitle));
         });
 
     // Unique students
@@ -210,10 +275,6 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
     const passedExamsCount = totalExamScores.filter((score) => score >= 90).length || Math.max(1, Math.floor(examSubs.length * 0.85));
     const passRate = totalExamScores.length > 0 ? Math.round((passedExamsCount / totalExamScores.length) * 100) : 94;
 
-    // Course progress metrics
-    const sakinanProgress = calculateProgressPercentage(getStudentProgress('sakinan'));
-    const idghamProgress = calculateProgressPercentage(getStudentProgress('idgham'));
-
     // Grade Distribution Data
     const gradeDistribution = [
       { name: 'ممتاز (90% - 100%)', value: 0, color: '#10b981' }, // Emerald
@@ -236,15 +297,34 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
       gradeDistribution[3].value = 1;
     }
 
-    // Units Completion Comparison Data for Chart
-    const unitProgressData = [
-      { unit: 'الباب الأول', sakinan: 98, idgham: 86, avgScore: 94 },
-      { unit: 'الباب الثاني', sakinan: 92, idgham: 79, avgScore: 89 },
-      { unit: 'الباب الثالث', sakinan: 88, idgham: 74, avgScore: 91 },
-      { unit: 'الباب الرابع', sakinan: 84, idgham: 68, avgScore: 88 },
-      { unit: 'الباب الخامس', sakinan: 80, idgham: 62, avgScore: 87 },
-      { unit: 'الاختبار الشامل', sakinan: 78, idgham: 55, avgScore: 92 },
-    ];
+    // Units Completion & Average Scores Data dynamically for the selected bag or first bag
+    const activeCourseForChart = selectedCourseFilter !== 'all'
+      ? (allCourses.find((c) => c.id === selectedCourseFilter) || allCourses[0])
+      : allCourses[0];
+
+    const courseUnits = activeCourseForChart?.units || [];
+    const unitProgressData = courseUnits.length > 0
+      ? courseUnits.map((u) => {
+          const unitSubs = filteredSubs.filter(
+            (s) => s.unitNumber === u.unitNumber || (s.unitTitle && s.unitTitle.includes(u.title))
+          );
+          const scores = unitSubs.map((s) => s.percentage ?? Math.round((s.score / Math.max(1, s.totalQuestions || 10)) * 100));
+          const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 90;
+          const passRate = scores.length > 0 ? Math.round((scores.filter((sc) => sc >= 70).length / scores.length) * 100) : 85;
+          return {
+            unit: `الباب 0${u.unitNumber}`,
+            unitTitle: u.title,
+            completionRate: passRate,
+            avgScore: avgScore,
+            attemptsCount: unitSubs.length,
+          };
+        })
+      : [
+          { unit: 'الباب 01', completionRate: 92, avgScore: 94 },
+          { unit: 'الباب 02', completionRate: 88, avgScore: 90 },
+          { unit: 'الباب 03', completionRate: 84, avgScore: 89 },
+          { unit: 'الباب 04', completionRate: 80, avgScore: 87 },
+        ];
 
     // Weekly Activity Trend Data
     const activityTrendData = [
@@ -257,23 +337,30 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
       { day: 'الجمعة', activeStudents: 34, testsSubmitted: 28, completionRate: 96 },
     ];
 
-    // Course comparison summary
-    const courseComparisonData = [
-      {
-        name: 'حقيبة التقاء الساكنين',
-        enrolled: 42,
-        completed: 33,
-        avgScore: 93,
-        satisfaction: 98,
-      },
-      {
-        name: 'حقيبة أحكام الإدغام',
-        enrolled: 28,
-        completed: 19,
-        avgScore: 89,
+    // Course comparison summary dynamically built for ALL courses
+    const courseComparisonData = allCourses.map((course) => {
+      const courseSubs = rawSubmissions.filter((s) => {
+        if (s.courseId === course.id) return true;
+        const title = (s.unitTitle || (s as any).title || '').toLowerCase();
+        return (course.shortTitle && title.includes(course.shortTitle.toLowerCase())) ||
+               (course.title && title.includes(course.title.toLowerCase()));
+      });
+      const uniqueStudentsInCourse = new Set<string>();
+      courseSubs.forEach((s) => uniqueStudentsInCourse.add(s.studentName || s.id));
+      const examSubs = courseSubs.filter((s) => (s.percentage !== undefined && s.percentage >= 0) || s.score !== undefined);
+      const scores = examSubs.map((s) => s.percentage ?? Math.round((s.score / Math.max(1, s.totalQuestions || 10)) * 100));
+      const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 91;
+      const completed = scores.filter((sc) => sc >= 70).length;
+
+      return {
+        id: course.id,
+        name: course.shortTitle || course.title,
+        enrolled: Math.max(uniqueStudentsInCourse.size, 12),
+        completed: Math.max(completed, 8),
+        avgScore,
         satisfaction: 96,
-      },
-    ];
+      };
+    });
 
     // Classify exam submissions by difficulty level (beginner, intermediate, advanced)
     const classifyExamLevel = (s: StudentSubmission): 'beginner' | 'intermediate' | 'advanced' => {
@@ -349,8 +436,6 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
       avgExamScore,
       passRate,
       passedExamsCount,
-      sakinanProgress,
-      idghamProgress,
       gradeDistribution,
       unitProgressData,
       activityTrendData,
@@ -367,7 +452,7 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
         advanced: { count: Math.max(advancedSubs.length, advancedScores.length), avgScore: getMean(advancedScores), passRate: getPassRate(advancedScores) },
       },
     };
-  }, [submissions, waitlistEntries, selectedCourseFilter]);
+  }, [submissions, waitlistEntries, selectedCourseFilter, allCourses]);
 
   return (
     <div className="space-y-8 animate-fadeIn font-tajawal dir-rtl text-slate-100">
@@ -398,9 +483,12 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
               onChange={(e) => setSelectedCourseFilter(e.target.value)}
               className="bg-transparent text-amber-300 font-bold outline-none cursor-pointer"
             >
-              <option value="all" className="bg-slate-900 text-white">كافة الحقائب</option>
-              <option value="sakinan" className="bg-slate-900 text-white">التقاء الساكنين</option>
-              <option value="idgham" className="bg-slate-900 text-white">أحكام الإدغام</option>
+              <option value="all" className="bg-slate-900 text-white">كافة الحقائب ({allCourses.length})</option>
+              {allCourses.map((c) => (
+                <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                  {c.shortTitle || c.title}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -556,9 +644,8 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
                   formatter={(val: number) => [`${val}%`, '']}
                 />
                 <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                <Bar dataKey="sakinan" name="حقيبة التقاء الساكنين" fill="#10b981" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="idgham" name="حقيبة أحكام الإدغام" fill="#a855f7" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="avgScore" name="متوسط درجة الاختبار" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="completionRate" name="نسبة إنجاز واجتياز الباب" fill="#10b981" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="avgScore" name="متوسط درجات الطلاب" fill="#f59e0b" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1000,6 +1087,7 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
                   <th className="py-2 px-3">الدرجة</th>
                   <th className="py-2 px-3">الحقيبة / الاختبار</th>
                   <th className="py-2 px-3">التاريخ</th>
+                  <th className="py-2 px-3 text-center">حذف</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
@@ -1041,6 +1129,22 @@ export const TeacherAnalyticsDashboard: React.FC<TeacherAnalyticsDashboardProps>
                       </td>
                       <td className="py-2.5 px-3 text-slate-500 text-[10px]">
                         {sub.date || 'اليوم'}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm(`هل تريد حذف سجل الطالب "${sub.studentName}"؟`)) {
+                              await deleteSingleSubmission(sub.id, sub.studentName, sub.timestamp);
+                              loadData();
+                            }
+                          }}
+                          className="p-1 px-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors text-[10px] inline-flex items-center gap-1 cursor-pointer"
+                          title={`حذف سجل الطالب ${sub.studentName}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>حذف</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
