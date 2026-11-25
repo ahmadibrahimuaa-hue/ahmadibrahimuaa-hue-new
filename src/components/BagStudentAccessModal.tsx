@@ -16,8 +16,10 @@ import {
   DEFAULT_ENROLLED_STUDENTS, 
   StudentCourseAccessMap, 
   subscribeStudentAccess,
-  getStudentEffectiveCourseAccess 
+  getStudentEffectiveCourseAccess,
+  resolveEffectiveBagMode
 } from '../utils/studentAccessStorage';
+import { updateCourseStatus } from '../utils/courseCustomStorage';
 import { getStudentProfile, getSubmissionsList } from '../utils/studentStorage';
 import { getWaitlistEntries } from '../utils/waitlistStorage';
 
@@ -37,8 +39,7 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
   const [accessMap, setAccessMap] = useState<StudentCourseAccessMap>(() => getStoredStudentAccessMap());
   const [currentMode, setCurrentMode] = useState<BagAccessMode>(() => {
     if (!course) return 'all_unlocked';
-    const defaultMode = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
-    return getBagAccessMode(course.id, defaultMode);
+    return resolveEffectiveBagMode(course.id, course.status || 'available', course.pricing?.isPaid ?? false);
   });
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterState, setFilterState] = useState<'all' | 'granted' | 'locked'>('all');
@@ -57,9 +58,8 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
 
   useEffect(() => {
     if (!course) return;
-    const defaultMode = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
-    setCurrentMode(getBagAccessMode(course.id, defaultMode));
-  }, [course?.id, course?.status]);
+    setCurrentMode(resolveEffectiveBagMode(course.id, course.status || 'available', course.pricing?.isPaid ?? false));
+  }, [course?.id, course?.status, course?.pricing?.isPaid]);
 
   // Aggregate all enrolled & active students
   const allStudents = useMemo(() => {
@@ -104,14 +104,19 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
   const evaluatedStudents = useMemo(() => {
     if (!course) return [];
     return allStudents.map((s) => {
-      const effective = getStudentEffectiveCourseAccess(s.name, course.id, course.status || 'available');
+      const effective = getStudentEffectiveCourseAccess(
+        s.name,
+        course.id,
+        course.status || 'available',
+        course.pricing?.isPaid ?? false
+      );
       return {
         ...s,
         isUnlocked: effective.isUnlocked,
         reason: effective.reason,
       };
     });
-  }, [allStudents, course?.id, course?.status, accessMap, currentMode]);
+  }, [allStudents, course?.id, course?.status, course?.pricing?.isPaid, accessMap, currentMode]);
 
   // Filter students by search and filter state
   const filteredStudents = useMemo(() => {
@@ -136,6 +141,19 @@ export const BagStudentAccessModal: React.FC<BagStudentAccessModalProps> = ({
   const handleModeChange = (mode: BagAccessMode) => {
     setCurrentMode(mode);
     setBagAccessMode(course.id, mode);
+
+    if (mode === 'all_locked' && course.status !== 'coming_soon') {
+      updateCourseStatus(course.id, 'locked');
+    } else if (mode === 'selective_locked' && course.status === 'locked') {
+      updateCourseStatus(course.id, 'available');
+    } else if (mode === 'all_unlocked') {
+      if (course.pricing?.isPaid) {
+        updateCourseStatus(course.id, 'available', false, 'متاحة مجاناً ومفتوحة');
+      } else if (course.status === 'locked') {
+        updateCourseStatus(course.id, 'available');
+      }
+    }
+
     if (onNotify) {
       onNotify(
         mode === 'all_unlocked'

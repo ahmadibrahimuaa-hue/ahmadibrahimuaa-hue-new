@@ -269,6 +269,7 @@ export const saveSubmission = async (
 export const logoutStudent = (): void => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem('tajweed_unlocked_courses_list');
   }
   notifyProfileListeners(null);
   if (typeof window !== 'undefined') {

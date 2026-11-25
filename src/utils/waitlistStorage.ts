@@ -2,6 +2,7 @@ import { collection, doc, setDoc, getDocs, onSnapshot, deleteDoc, updateDoc, que
 import { db } from '../firebase';
 import { getStudentProfile } from './studentStorage';
 import { grantCourseAccessToStudent, revokeCourseAccessFromStudent } from './studentProgressStorage';
+import { setStudentCourseAccess } from './studentAccessStorage';
 
 export interface WaitlistEntry {
   id?: string;
@@ -169,7 +170,8 @@ export const approveAndUnlockStudent = async (
     const entryId = entry.id || `${entry.courseId}_${entry.studentName.replace(/\s+/g, '_')}_${entry.timestamp}`;
     const now = Date.now();
 
-    // 1. Grant student course access in local unlocked storage
+    // 1. Grant per-student course access (local + Firestore) and legacy fallback
+    await setStudentCourseAccess(entry.studentName, entry.courseId, true);
     grantCourseAccessToStudent(entry.courseId);
 
     // 2. Update Firestore
@@ -222,7 +224,8 @@ export const revokeAndRelockStudent = async (
   try {
     const entryId = entry.id || `${entry.courseId}_${entry.studentName.replace(/\s+/g, '_')}_${entry.timestamp}`;
     
-    // Revoke from local student access
+    // Revoke per-student course access (local + Firestore)
+    await setStudentCourseAccess(entry.studentName, entry.courseId, false);
     revokeCourseAccessFromStudent(entry.courseId);
 
     // Update Firestore

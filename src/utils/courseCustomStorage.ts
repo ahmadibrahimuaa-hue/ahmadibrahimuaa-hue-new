@@ -1,10 +1,250 @@
+import { doc, setDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { Course, Unit, Lesson, CourseStatus, CourseLevel } from '../types';
-import { ALL_COURSES as DEFAULT_ALL_COURSES, SAKINAN_COURSE } from '../data/courses';
+import { SAKINAN_COURSE } from '../data/courses/sakinanCourse';
+import { IDGHAM_COURSE } from '../data/courses/idghamCourse';
+import { MAKHARIJ_COURSE, IJAZAH_COURSE } from '../data/courses/upcomingCourses';
+import { FOUNDATIONAL_RULES_COURSE } from '../data/courses/foundationalLessonsCourse';
+
+const DEFAULT_ALL_COURSES: Course[] = [
+  FOUNDATIONAL_RULES_COURSE,
+  SAKINAN_COURSE,
+  IDGHAM_COURSE,
+  MAKHARIJ_COURSE,
+  IJAZAH_COURSE,
+];
 
 const CUSTOM_COURSES_STORAGE_KEY = 'tajweed_custom_courses_v2';
 const COURSES_ORDER_KEY = 'tajweed_courses_order_v2';
 const DELETED_COURSES_STORAGE_KEY = 'tajweed_deleted_courses_v2';
 const DELETED_COURSES_ARCHIVE_KEY = 'tajweed_deleted_courses_archive_v2';
+const COURSES_META_TS_KEY = 'tajweed_courses_meta_ts_v2';
+
+let isCoursesSyncInitialized = false;
+
+interface CourseOverrideMeta {
+  status?: CourseStatus;
+  pricing?: Course['pricing'];
+  order?: number;
+  parentCourseId?: string | null;
+  title?: string;
+  shortTitle?: string;
+  subtitle?: string;
+  badge?: string;
+  description?: string;
+  level?: CourseLevel;
+  levelText?: string;
+  author?: string;
+  expectedDuration?: string;
+}
+
+interface CoursesMetaDoc {
+  overrides: Record<string, CourseOverrideMeta>;
+  courseOrder: string[];
+  deletedIds: string[];
+  updatedAt: number;
+}
+
+const stripUndefined = <T,>(val: T): T => {
+  if (Array.isArray(val)) {
+    return val.map((item) => stripUndefined(item)) as unknown as T;
+  }
+  if (val && typeof val === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (v !== undefined) {
+        out[k] = stripUndefined(v);
+      }
+    }
+    return out as T;
+  }
+  return val;
+};
+
+const getDefaultCourseIds = (): Set<string> => new Set(DEFAULT_ALL_COURSES.map((c) => c.id));
+
+const syncCoursesToFirestore = (courses: Course[], deletedIds: string[], timestamp: number): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    const defaultCourseIds = getDefaultCourseIds();
+    const overrides: Record<string, CourseOverrideMeta> = {};
+    courses.forEach((c, idx) => {
+      overrides[c.id] = stripUndefined({
+        status: c.status,
+        pricing: c.pricing,
+        order: c.order !== undefined ? c.order : idx,
+        parentCourseId: c.parentCourseId !== undefined ? c.parentCourseId : null,
+        title: c.title,
+        shortTitle: c.shortTitle,
+        subtitle: c.subtitle,
+        badge: c.badge,
+        description: c.description,
+        level: c.level,
+        levelText: c.levelText,
+        author: c.author,
+        expectedDuration: c.expectedDuration,
+      });
+
+      // Persist brand-new custom courses (not in defaults) in custom_courses collection
+      if (!defaultCourseIds.has(c.id)) {
+        const customDocRef = doc(db, 'custom_courses', c.id);
+        setDoc(customDocRef, stripUndefined({ ...c, updatedAt: timestamp }), { merge: true }).catch((err) => {
+          console.warn('Firestore custom course sync failed:', err);
+        });
+      }
+    });
+
+    // Remove deleted custom courses from custom_courses if any
+    deletedIds.forEach((delId) => {
+      if (!defaultCourseIds.has(delId)) {
+        deleteDoc(doc(db, 'custom_courses', delId)).catch(() => {});
+      }
+    });
+
+    const metaPayload: CoursesMetaDoc = {
+      overrides,
+      courseOrder: courses.map((c) => c.id),
+      deletedIds,
+      updatedAt: timestamp,
+    };
+
+    const metaRef = doc(db, 'settings', 'courses_meta');
+    setDoc(metaRef, stripUndefined(metaPayload), { merge: true }).catch((err) => {
+      console.warn('Firestore courses_meta sync failed:', err);
+    });
+  } catch (err) {
+    console.warn('Error preparing Firestore courses sync:', err);
+  }
+};
+
+export const initCoursesFirestoreSync = (): void => {
+  if (typeof window === 'undefined' || isCoursesSyncInitialized) return;
+  isCoursesSyncInitialized = true;
+
+  let latestRemoteMeta: CoursesMetaDoc | null = null;
+  let latestRemoteCustomCourses: Course[] = [];
+
+  const applyRemoteToLocal = () => {
+    if (!latestRemoteMeta && latestRemoteCustomCourses.length === 0) return;
+
+    try {
+      const localTs = Number(localStorage.getItem(COURSES_META_TS_KEY) || '0');
+      const remoteTs = Number(latestRemoteMeta?.updatedAt || '0');
+
+      if (latestRemoteMeta && remoteTs < localTs && localTs > 0) {
+        return;
+      }
+
+      if (latestRemoteMeta?.deletedIds) {
+        localStorage.setItem(DELETED_COURSES_STORAGE_KEY, JSON.stringify(latestRemoteMeta.deletedIds));
+      }
+
+      const deletedSet = new Set(latestRemoteMeta?.deletedIds || getDeletedCourseIds());
+      const currentCourses = getCustomStoredCourses();
+      const courseMap = new Map<string, Course>();
+
+      currentCourses.forEach((c) => {
+        if (!deletedSet.has(c.id)) {
+          courseMap.set(c.id, c);
+        }
+      });
+
+      // Add/update custom courses from Firestore
+      latestRemoteCustomCourses.forEach((rc) => {
+        if (!deletedSet.has(rc.id)) {
+          courseMap.set(rc.id, rc);
+        }
+      });
+
+      // Apply remote metadata overrides (status, pricing, order, parentCourseId, titles, etc.)
+      if (latestRemoteMeta?.overrides) {
+        Object.entries(latestRemoteMeta.overrides).forEach(([cId, ov]) => {
+          if (deletedSet.has(cId)) return;
+          const existing = courseMap.get(cId) || DEFAULT_ALL_COURSES.find((d) => d.id === cId);
+          if (!existing) return;
+
+          courseMap.set(cId, {
+            ...existing,
+            status: ov.status || existing.status,
+            pricing: ov.pricing ? { ...existing.pricing, ...ov.pricing } : existing.pricing,
+            order: ov.order !== undefined ? ov.order : existing.order,
+            parentCourseId: ov.parentCourseId !== undefined ? ov.parentCourseId : existing.parentCourseId,
+            title: ov.title || existing.title,
+            shortTitle: ov.shortTitle || existing.shortTitle,
+            subtitle: ov.subtitle || existing.subtitle,
+            badge: ov.badge || existing.badge,
+            description: ov.description || existing.description,
+            level: ov.level || existing.level,
+            levelText: ov.levelText || existing.levelText,
+            author: ov.author || existing.author,
+            expectedDuration: ov.expectedDuration || existing.expectedDuration,
+          });
+        });
+      }
+
+      let mergedList: Course[] = [];
+      const orderIds = latestRemoteMeta?.courseOrder || [];
+      if (orderIds.length > 0) {
+        orderIds.forEach((id) => {
+          const item = courseMap.get(id);
+          if (item) {
+            mergedList.push(item);
+            courseMap.delete(id);
+          }
+        });
+      }
+      courseMap.forEach((item) => {
+        mergedList.push(item);
+      });
+
+      localStorage.setItem(CUSTOM_COURSES_STORAGE_KEY, JSON.stringify(mergedList));
+      if (remoteTs > 0) {
+        localStorage.setItem(COURSES_META_TS_KEY, String(remoteTs));
+      }
+
+      window.dispatchEvent(new CustomEvent('tajweed_courses_updated', { detail: { courses: mergedList } }));
+      window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: mergedList }));
+    } catch (err) {
+      console.warn('Failed to apply remote courses update:', err);
+    }
+  };
+
+  try {
+    const metaRef = doc(db, 'settings', 'courses_meta');
+    onSnapshot(
+      metaRef,
+      (snap) => {
+        if (snap.exists()) {
+          latestRemoteMeta = snap.data() as CoursesMetaDoc;
+          applyRemoteToLocal();
+        }
+      },
+      (err) => {
+        console.warn('Firestore courses_meta onSnapshot error:', err);
+      }
+    );
+
+    const customColRef = collection(db, 'custom_courses');
+    onSnapshot(
+      customColRef,
+      (snap) => {
+        const list: Course[] = [];
+        snap.forEach((d) => {
+          list.push(d.data() as Course);
+        });
+        latestRemoteCustomCourses = list;
+        if (list.length > 0 || latestRemoteMeta) {
+          applyRemoteToLocal();
+        }
+      },
+      (err) => {
+        console.warn('Firestore custom_courses onSnapshot error:', err);
+      }
+    );
+  } catch (err) {
+    console.warn('Failed to init courses Firestore sync:', err);
+  }
+};
 
 export const getDeletedCourseIds = (): string[] => {
   if (typeof window === 'undefined') return [];
@@ -145,9 +385,13 @@ export const getCustomStoredCourses = (): Course[] => {
 export const saveAllCourses = (courses: Course[]): boolean => {
   if (typeof window === 'undefined') return false;
   try {
+    const now = Date.now();
     localStorage.setItem(CUSTOM_COURSES_STORAGE_KEY, JSON.stringify(courses));
+    localStorage.setItem(COURSES_META_TS_KEY, String(now));
     window.dispatchEvent(new CustomEvent('tajweed_courses_updated', { detail: { courses } }));
     window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: courses }));
+
+    syncCoursesToFirestore(courses, getDeletedCourseIds(), now);
     return true;
   } catch (e) {
     console.error('Error saving custom courses:', e);
@@ -590,10 +834,14 @@ export const createBagWithLesson = (
 export const resetCoursesToDefault = (): boolean => {
   if (typeof window === 'undefined') return false;
   try {
+    const now = Date.now();
     localStorage.removeItem(CUSTOM_COURSES_STORAGE_KEY);
     localStorage.removeItem(DELETED_COURSES_STORAGE_KEY);
     localStorage.removeItem(DELETED_COURSES_ARCHIVE_KEY);
+    localStorage.setItem(COURSES_META_TS_KEY, String(now));
+    syncCoursesToFirestore(DEFAULT_ALL_COURSES, [], now);
     window.dispatchEvent(new CustomEvent('tajweed_courses_updated', { detail: { courses: DEFAULT_ALL_COURSES } }));
+    window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: DEFAULT_ALL_COURSES }));
     return true;
   } catch (e) {
     return false;
@@ -688,6 +936,8 @@ export const unnestCourseToRoot = (courseId: string): boolean => {
 };
 
 export const subscribeCourses = (callback: (courses: Course[]) => void) => {
+  initCoursesFirestoreSync();
+
   const handler = (e: Event) => {
     const customEvent = e as CustomEvent<{ courses: Course[] }>;
     if (customEvent.detail && customEvent.detail.courses) {

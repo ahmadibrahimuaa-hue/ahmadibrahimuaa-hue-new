@@ -24,6 +24,7 @@ import { getStudentProfile, subscribeStudentProfile } from './utils/studentStora
 import { getCurrentAuthTrainer, setCurrentAuthTrainer, SUPER_ADMIN_ACCOUNT, subscribeTrainers, getAllTrainersAsync, clearStaleAuthSessions } from './utils/trainerStorage';
 import { getAllCourses, SAKINAN_COURSE, FOUNDATIONAL_RULES_COURSE, DEFAULT_COURSE_ID, getCourseById } from './data/courses';
 import { subscribeCourses } from './utils/courseCustomStorage';
+import { initStudentAccessFirestoreSync, initBagAccessModesFirestoreSync } from './utils/studentAccessStorage';
 import { Course, StudentProfile, TrainerAccount } from './types';
 import { SUMMARY_TABLE_DATA } from './data/summaryData';
 import { WhatsAppSupport, FloatingWhatsAppSupport } from './components/WhatsAppSupport';
@@ -210,6 +211,11 @@ export default function App() {
     if (isTeacherMode) {
       setShowRegistrationModal(false);
     } else {
+      if (typeof window !== 'undefined' && window.location.search.includes('mode=teacher')) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('mode');
+        window.history.replaceState({}, '', url.toString());
+      }
       const prof = getStudentProfile();
       if (!prof || !prof.name || !prof.name.trim()) {
         setShowRegistrationModal(true);
@@ -264,6 +270,9 @@ export default function App() {
   const [, setUnlockUpdateCounter] = useState(0);
 
   useEffect(() => {
+    initStudentAccessFirestoreSync();
+    initBagAccessModesFirestoreSync();
+
     const handleUnlockEvent = () => {
       setUnlockUpdateCounter((c) => c + 1);
     };
@@ -275,12 +284,14 @@ export default function App() {
     };
     window.addEventListener('tajweed_unlocked_updated', handleUnlockEvent);
     window.addEventListener('tajweed_student_access_updated', handleUnlockEvent);
+    window.addEventListener('tajweed_bag_access_modes_updated', handleUnlockEvent);
     window.addEventListener('tajweed_courses_updated', handleUnlockEvent);
     window.addEventListener('tajweed_open_share_achievement', handleOpenShare);
     window.addEventListener('tajweed_open_progress_modal', handleOpenProg);
     return () => {
       window.removeEventListener('tajweed_unlocked_updated', handleUnlockEvent);
       window.removeEventListener('tajweed_student_access_updated', handleUnlockEvent);
+      window.removeEventListener('tajweed_bag_access_modes_updated', handleUnlockEvent);
       window.removeEventListener('tajweed_courses_updated', handleUnlockEvent);
       window.removeEventListener('tajweed_open_share_achievement', handleOpenShare);
       window.removeEventListener('tajweed_open_progress_modal', handleOpenProg);
@@ -290,8 +301,7 @@ export default function App() {
   const currentUnit = activeCourse.units[selectedUnitIndex] || activeCourse.units[0];
   const isCourseActiveUnlocked = isCourseUnlocked(activeCourseId, isTeacherMode, activeCourse);
   const isComingSoon = activeCourse.status === 'coming_soon';
-  const isLockedStatus = activeCourse.status === 'locked';
-  const shouldShowLockedPreview = !isTeacherMode && (!isCourseActiveUnlocked || isComingSoon || isLockedStatus);
+  const shouldShowLockedPreview = !isTeacherMode && (!isCourseActiveUnlocked || isComingSoon);
 
   return (
     <div className={`min-h-screen font-tajawal flex flex-col justify-between selection:bg-amber-200/60 selection:text-amber-950 transition-colors duration-300 ${

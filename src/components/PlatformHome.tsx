@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Course, StudentProfile, GroupThemeConfig, CourseLevel } from '../types';
 import { getAllCourses, SAKINAN_COURSE, FOUNDATIONAL_RULES_COURSE } from '../data/courses';
+import { subscribeCourses } from '../utils/courseCustomStorage';
 import { 
   getStudentProgress, 
   calculateProgressPercentage, 
@@ -9,6 +10,14 @@ import {
   getCourseLockDetails,
   SingleCourseProgress
 } from '../utils/studentProgressStorage';
+import {
+  subscribeStudentAccess,
+  subscribeBagAccessModes,
+  getStoredStudentAccessMap,
+  getStoredBagAccessModes,
+  StudentCourseAccessMap,
+  BagAccessMode
+} from '../utils/studentAccessStorage';
 import { 
   BookOpen, Trophy, ShieldCheck, Lock, Unlock, AlertTriangle, Layers, X, Briefcase, 
   Search, Share2, LogOut, Heart, ArrowLeft, Edit3, Sparkles, Filter, CheckCircle2,
@@ -101,6 +110,10 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
     return getHomeConfig().defaultViewMode === 'by_level' ? 'grouped' : 'grid';
   });
   const [showBagSwitchModal, setShowBagSwitchModal] = useState<boolean>(false);
+  const [allRawCourses, setAllRawCourses] = useState<Course[]>(() => getAllCourses());
+  const [accessMap, setAccessMap] = useState<StudentCourseAccessMap>(() => getStoredStudentAccessMap());
+  const [bagModes, setBagModes] = useState<Record<string, BagAccessMode>>(() => getStoredBagAccessModes());
+  const [unlockTick, setUnlockTick] = useState<number>(0);
 
   const [activeTheme, setActiveTheme] = useState<GroupThemeConfig | null>(() => {
     return getActiveThemeForStudent(studentProfile?.group);
@@ -124,13 +137,29 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
     const unsubHome = subscribeHomeConfig((cfg) => {
       setHomeConfig(cfg);
     });
+    const unsubCourses = subscribeCourses((updated) => {
+      setAllRawCourses(updated);
+    });
+    const unsubAccess = subscribeStudentAccess((map) => {
+      setAccessMap(map);
+    });
+    const unsubModes = subscribeBagAccessModes((modes) => {
+      setBagModes(modes);
+    });
+    const handleUnlockUpdated = () => {
+      setUnlockTick((t) => t + 1);
+    };
+    window.addEventListener('tajweed_unlocked_updated', handleUnlockUpdated);
+
     return () => {
       unsubFavs();
       unsubHome();
+      unsubCourses();
+      unsubAccess();
+      unsubModes();
+      window.removeEventListener('tajweed_unlocked_updated', handleUnlockUpdated);
     };
   }, []);
-
-  const allRawCourses = getAllCourses();
 
   // Merge courses with HomeConfig overrides and filter visibility
   const courses = useMemo(() => {
@@ -238,11 +267,11 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
       unlockedCourses: unlocked,
       lockedOrUpcomingCourses: locked,
     };
-  }, [filteredCourses, isTeacherMode]);
+  }, [filteredCourses, isTeacherMode, studentProfile?.name, accessMap, bagModes, unlockTick]);
 
   const totalUnlockedCoursesCount = useMemo(() => {
     return courses.filter((c) => isCourseUnlocked(c.id, isTeacherMode, c)).length;
-  }, [courses, isTeacherMode]);
+  }, [courses, isTeacherMode, studentProfile?.name, accessMap, bagModes, unlockTick]);
 
   // Group courses by level for the structured level view
   const groupedCoursesByLevel = useMemo(() => {
@@ -261,7 +290,7 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
         coursesList: sorted,
       };
     });
-  }, [courses, isTeacherMode]);
+  }, [courses, isTeacherMode, studentProfile?.name, accessMap, bagModes, unlockTick]);
 
   // Overall student stats across all courses
   const totalCompletedUnitsAllCourses = useMemo(() => {
@@ -983,22 +1012,36 @@ export const PlatformHome: React.FC<PlatformHomeProps> = ({
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {courses.map((c) => {
                 const isSelected = c.id === currentActiveCourse.id;
+                const unlocked = isCourseUnlocked(c.id, isTeacherMode, c);
                 const lvlInfo = LEVEL_LABELS[c.level || 'beginner'];
                 return (
                   <button
                     key={c.id}
-                    onClick={() => handleSwitchActiveCourse(c.id)}
+                    onClick={() => {
+                      if (!unlocked) {
+                        setShowBagSwitchModal(false);
+                        setLockedCourseModal(c.id);
+                      } else {
+                        handleSwitchActiveCourse(c.id);
+                      }
+                    }}
                     className={`w-full text-right p-3 rounded-xl border transition-colors cursor-pointer flex items-center justify-between gap-3 ${
-                      isSelected
+                      !unlocked
+                        ? 'bg-slate-950/60 border-slate-800/80 text-slate-400 opacity-80'
+                        : isSelected
                         ? 'bg-emerald-950/40 border-emerald-600/50 text-emerald-300 font-bold'
                         : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
                     }`}
                   >
                     <div>
-                      <div className="text-xs font-bold font-quran">{c.title}</div>
+                      <div className="text-xs font-bold font-quran flex items-center gap-1.5">
+                        {!unlocked && <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                        <span>{c.title}</span>
+                      </div>
                       <div className="text-[11px] text-slate-400">{lvlInfo.title}</div>
                     </div>
-                    {isSelected && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    {isSelected && unlocked && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    {!unlocked && <span className="text-[10px] text-amber-400 font-bold">مقفلة 🔒</span>}
                   </button>
                 );
               })}

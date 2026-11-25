@@ -74,13 +74,23 @@ export const CourseSidebar: React.FC<CourseSidebarProps> = ({
   const [reorderSuccessMsg, setReorderSuccessMsg] = useState<string | null>(null);
 
   const [coursesList, setCoursesList] = useState<Course[]>(() => getCustomStoredCourses());
+  const [, setAccessTick] = useState(0);
 
   // Subscribe to real-time course updates and reordering
   useEffect(() => {
     const unsub = subscribeCourses((updated) => {
       setCoursesList(updated);
     });
-    return () => unsub();
+    const handleRefresh = () => setAccessTick((t) => t + 1);
+    window.addEventListener('tajweed_unlocked_updated', handleRefresh);
+    window.addEventListener('tajweed_student_access_updated', handleRefresh);
+    window.addEventListener('tajweed_bag_access_modes_updated', handleRefresh);
+    return () => {
+      unsub();
+      window.removeEventListener('tajweed_unlocked_updated', handleRefresh);
+      window.removeEventListener('tajweed_student_access_updated', handleRefresh);
+      window.removeEventListener('tajweed_bag_access_modes_updated', handleRefresh);
+    };
   }, []);
 
   // Close sidebar on Esc

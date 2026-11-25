@@ -4,7 +4,7 @@ import { getStudentProfile, clearStudentProfile, clearAllSubmissions } from './s
 import { Course } from '../types';
 import { getCourseById, getAllCourses } from '../data/courses';
 import { getCourseBadges, notifyBadgeUnlocked } from './badgeSystem';
-import { getExplicitStudentCourseAccess, getBagAccessMode } from './studentAccessStorage';
+import { getExplicitStudentCourseAccess, resolveEffectiveBagMode } from './studentAccessStorage';
 
 export interface SingleCourseProgress {
   completedUnitNumbers: number[]; // e.g. [1, 2, 3]
@@ -396,84 +396,78 @@ export const getCourseLockDetails = (
     };
   }
 
-  // 3. STUDENT-SPECIFIC GRANULAR OVERRIDE (خليني محدد اكتر افتح ايه واقفل ايه عند مين)
+  const isPaid = Boolean(course.pricing?.isPaid);
+  const effectiveMode = resolveEffectiveBagMode(courseId, course.status || 'available', isPaid);
+
+  // 3. ALL LOCKED MODE (or status === 'locked' without selective override)
+  if (effectiveMode === 'all_locked') {
+    return {
+      isUnlocked: false,
+      statusType: 'teacher_locked',
+      badgeText: isPaid ? `${course.pricing?.priceText || 'مدفوعة'} • مقفلة 🔒` : 'مقفلة من المعلم 🔒',
+      badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
+      explanation: 'هذه الحقيبة مقفلة في النظام من قِبل المعلم ولا يمكن فتحها حالياً.',
+      isExplicitTeacherAction: true,
+    };
+  }
+
   const profile = getStudentProfile();
-  const studentName = profile?.name?.trim();
-  if (studentName) {
-    const explicit = getExplicitStudentCourseAccess(studentName, courseId);
-    if (explicit === false) {
-      return {
-        isUnlocked: false,
-        statusType: 'teacher_locked',
-        badgeText: 'مقفلة بقرار المعلم 🔒',
-        badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
-        explanation: `تم تقييد الوصول لهذه الحقيبة من قِبل المعلم مؤقتاً يا ${studentName}.`,
-        isExplicitTeacherAction: true,
-      };
-    } else if (explicit === true) {
+  const studentName = profile?.name?.trim() || '';
+  const explicit = studentName ? getExplicitStudentCourseAccess(studentName, courseId) : undefined;
+
+  // 4. SELECTIVE LOCKED OR PAID CONTENT (Locked by default unless explicitly granted to THIS student)
+  if (effectiveMode === 'selective_locked') {
+    if (explicit === true) {
       return {
         isUnlocked: true,
         statusType: 'teacher_unlocked',
-        badgeText: 'مفتوحة بقرار المعلم 🔑',
+        badgeText: isPaid ? 'مشترك ومفعّل 🔑' : 'مفتوحة بقرار المعلم 🔑',
         badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-400 font-bold',
         explanation: `تم منحك صلاحية فتح هذه الحقيبة خصيصاً من قِبل المعلم يا ${studentName}.`,
         isExplicitTeacherAction: true,
       };
     }
-  }
 
-  // 4. BAG ACCESS MODE & STATUS CHECK
-  const defaultMode = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
-  const bagMode = getBagAccessMode(courseId, defaultMode);
+    if (isPaid) {
+      return {
+        isUnlocked: false,
+        statusType: 'paid_locked',
+        badgeText: `${course.pricing?.priceText || 'محتوى مدفوع'} 🔒`,
+        badgeClass: 'bg-amber-950/90 text-amber-300 border-amber-500',
+        explanation: 'هذه الحقيبة مدفوعة ومقفلة حالياً، وتتطلب اشتراكاً أو إذن المعلم المباشر.',
+        isExplicitTeacherAction: false,
+      };
+    }
 
-  if (bagMode === 'all_locked' || course.status === 'locked') {
     return {
       isUnlocked: false,
       statusType: 'teacher_locked',
-      badgeText: 'مقفلة من المعلم 🔒',
-      badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
-      explanation: 'هذه الحقيبة مقفلة في النظام من قِبل المعلم.',
-      isExplicitTeacherAction: true,
-    };
-  }
-
-  if (bagMode === 'selective_locked') {
-    // When bag is selective, only students with explicit grant can access
-    return {
-      isUnlocked: false,
-      statusType: 'teacher_locked',
-      badgeText: 'تتطلب إذن المعلم 🔒',
+      badgeText: 'مقفلة • تتطلب إذن المعلم 🔒',
       badgeClass: 'bg-amber-950/90 text-amber-300 border-amber-600 font-bold',
       explanation: 'هذه الحقيبة مخصصة لطلاب محددين وتتطلب إذناً خاصاً من المعلم لفتحها.',
       isExplicitTeacherAction: true,
     };
   }
 
-  // 5. PAID / RESTRICTED CONTENT
-  if (course.pricing?.isPaid) {
-    const explicitlyUnlocked = getStudentUnlockedCourses();
-    const isGranted = explicitlyUnlocked.includes(courseId);
-    if (!isGranted) {
-      return {
-        isUnlocked: false,
-        statusType: 'paid_locked',
-        badgeText: `${course.pricing.priceText || 'محتوى مدفوع'} 🔒`,
-        badgeClass: 'bg-amber-950/90 text-amber-300 border-amber-500',
-        explanation: 'هذه الحقيبة تتطلب اشتراكاً أو إذن المعلم المباشر.',
-        isExplicitTeacherAction: false,
-      };
-    }
+  // 5. ALL UNLOCKED MODE (Free & available courses)
+  if (explicit === false) {
+    return {
+      isUnlocked: false,
+      statusType: 'teacher_locked',
+      badgeText: 'مقفلة بقرار المعلم 🔒',
+      badgeClass: 'bg-rose-950/90 text-rose-300 border-rose-500 font-bold',
+      explanation: `تم تقييد الوصول لهذه الحقيبة من قِبل المعلم مؤقتاً يا ${studentName}.`,
+      isExplicitTeacherAction: true,
+    };
   }
 
-  // 6. DEFAULT FOR ACTIVE AVAILABLE COURSES
-  const isAvail = (course.status || 'available') === 'available';
   return {
-    isUnlocked: isAvail,
-    statusType: isAvail ? 'default_unlocked' : 'teacher_locked',
-    badgeText: isAvail ? 'مفتوحة ومتاحة 🟢' : 'مقفلة من المعلم 🔒',
-    badgeClass: isAvail ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500' : 'bg-rose-950/90 text-rose-300 border-rose-500',
-    explanation: isAvail ? 'الحقيبة متاحة للدراسة.' : 'الحقيبة مقفلة وتحتاج إذن المعلم.',
-    isExplicitTeacherAction: !isAvail,
+    isUnlocked: true,
+    statusType: 'default_unlocked',
+    badgeText: 'مفتوحة ومتاحة 🟢',
+    badgeClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-500',
+    explanation: 'الحقيبة متاحة للدراسة.',
+    isExplicitTeacherAction: false,
   };
 };
 

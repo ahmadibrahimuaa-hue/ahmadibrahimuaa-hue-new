@@ -1,7 +1,7 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Course } from '../types';
-import { getStudentProfile } from './studentStorage';
+import { getStudentProfile, normalizeStudentNameForMatch } from './studentStorage';
 
 export interface StudentCourseAccessMap {
   // studentName -> { [courseId: string]: boolean }
@@ -12,8 +12,99 @@ export interface StudentCourseAccessMap {
 
 const ACCESS_STORAGE_KEY = 'tajweed_student_granular_access_v1';
 const BAG_ACCESS_MODES_KEY = 'tajweed_bag_access_modes_v1';
+const BAG_ACCESS_MODES_TS_KEY = 'tajweed_bag_access_modes_ts_v1';
 
 export type BagAccessMode = 'all_unlocked' | 'selective_locked' | 'all_locked';
+
+let isStudentAccessSyncInitialized = false;
+let isBagModesSyncInitialized = false;
+
+const dispatchAccessEvents = (detail?: unknown) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('tajweed_student_access_updated', { detail }));
+  window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail }));
+};
+
+const dispatchBagModesEvents = (modes: Record<string, BagAccessMode>) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('tajweed_bag_access_modes_updated', { detail: modes }));
+  window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: modes }));
+};
+
+export const initBagAccessModesFirestoreSync = (): void => {
+  if (typeof window === 'undefined' || isBagModesSyncInitialized) return;
+  isBagModesSyncInitialized = true;
+
+  try {
+    const docRef = doc(db, 'settings', 'bag_access_modes');
+    onSnapshot(
+      docRef,
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as { modes?: Record<string, BagAccessMode>; updatedAt?: number };
+        if (!data || !data.modes || typeof data.modes !== 'object') return;
+
+        const localTs = Number(localStorage.getItem(BAG_ACCESS_MODES_TS_KEY) || '0');
+        const remoteTs = Number(data.updatedAt || '0');
+
+        if (remoteTs >= localTs || localTs === 0) {
+          localStorage.setItem(BAG_ACCESS_MODES_KEY, JSON.stringify(data.modes));
+          if (remoteTs > 0) {
+            localStorage.setItem(BAG_ACCESS_MODES_TS_KEY, String(remoteTs));
+          }
+          dispatchBagModesEvents(data.modes);
+        }
+      },
+      (err) => {
+        console.warn('Firestore bag_access_modes sync error:', err);
+      }
+    );
+  } catch (err) {
+    console.warn('Failed to initialize bag_access_modes Firestore sync:', err);
+  }
+};
+
+export const initStudentAccessFirestoreSync = (): void => {
+  if (typeof window === 'undefined' || isStudentAccessSyncInitialized) return;
+  isStudentAccessSyncInitialized = true;
+
+  initBagAccessModesFirestoreSync();
+
+  try {
+    const colRef = collection(db, 'student_access');
+    onSnapshot(
+      colRef,
+      (snapshot) => {
+        const currentLocal = getStoredStudentAccessMap();
+        const merged: StudentCourseAccessMap = { ...currentLocal };
+        let hasChanges = false;
+
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as {
+            studentName?: string;
+            courses?: Record<string, boolean>;
+            updatedAt?: number;
+          };
+          const sName = (data.studentName || docSnap.id || '').trim();
+          if (sName && data.courses && typeof data.courses === 'object') {
+            merged[sName] = { ...data.courses };
+            hasChanges = true;
+          }
+        });
+
+        if (hasChanges) {
+          localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(merged));
+          dispatchAccessEvents(merged);
+        }
+      },
+      (err) => {
+        console.warn('Firestore student_access sync error:', err);
+      }
+    );
+  } catch (err) {
+    console.warn('Failed to initialize student_access Firestore sync:', err);
+  }
+};
 
 export const getStoredBagAccessModes = (): Record<string, BagAccessMode> => {
   if (typeof window === 'undefined') return {};
@@ -31,16 +122,52 @@ export const getBagAccessMode = (courseId: string, defaultMode: BagAccessMode = 
 };
 
 export const setBagAccessMode = (courseId: string, mode: BagAccessMode): void => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !courseId) return;
   try {
     const modes = getStoredBagAccessModes();
     modes[courseId] = mode;
+    const now = Date.now();
     localStorage.setItem(BAG_ACCESS_MODES_KEY, JSON.stringify(modes));
-    window.dispatchEvent(new CustomEvent('tajweed_bag_access_modes_updated', { detail: modes }));
-    window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: modes }));
+    localStorage.setItem(BAG_ACCESS_MODES_TS_KEY, String(now));
+    dispatchBagModesEvents(modes);
+
+    // Sync to Firestore so all students on any device/browser immediately enforce this mode
+    const docRef = doc(db, 'settings', 'bag_access_modes');
+    setDoc(
+      docRef,
+      {
+        modes,
+        updatedAt: now,
+      },
+      { merge: true }
+    ).catch((err) => {
+      console.warn('Firestore bag access mode sync failed:', err);
+    });
   } catch (err) {
     console.error('Failed to save bag access mode:', err);
   }
+};
+
+export const subscribeBagAccessModes = (
+  callback: (modes: Record<string, BagAccessMode>) => void
+): (() => void) => {
+  initBagAccessModesFirestoreSync();
+
+  const handler = () => {
+    callback(getStoredBagAccessModes());
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('tajweed_bag_access_modes_updated', handler);
+  }
+
+  callback(getStoredBagAccessModes());
+
+  return () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('tajweed_bag_access_modes_updated', handler);
+    }
+  };
 };
 
 // Initial cohort of sample students so the teacher has immediate students to manage
@@ -68,8 +195,7 @@ export const saveStoredStudentAccessMap = (map: StudentCourseAccessMap): boolean
   if (typeof window === 'undefined') return false;
   try {
     localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(map));
-    window.dispatchEvent(new CustomEvent('tajweed_student_access_updated', { detail: map }));
-    window.dispatchEvent(new CustomEvent('tajweed_unlocked_updated', { detail: map }));
+    dispatchAccessEvents(map);
     return true;
   } catch (err) {
     console.error('Failed to save student access map:', err);
@@ -79,18 +205,32 @@ export const saveStoredStudentAccessMap = (map: StudentCourseAccessMap): boolean
 
 /**
  * Check whether a specific course is unlocked for a given student.
+ * Checks exact trimmed name first, then Arabic-normalized match.
  * If explicitly set in access map: returns that explicit boolean.
- * Otherwise returns undefined so caller can fallback to course default logic.
+ * Otherwise returns undefined so caller can fallback to course/bag policy.
  */
 export const getExplicitStudentCourseAccess = (
   studentName: string,
   courseId: string
 ): boolean | undefined => {
+  const cleanName = (studentName || '').trim();
+  if (!cleanName || !courseId) return undefined;
+
   const map = getStoredStudentAccessMap();
-  const studentMap = map[studentName.trim()];
-  if (studentMap && typeof studentMap[courseId] === 'boolean') {
-    return studentMap[courseId];
+  const exactStudentMap = map[cleanName];
+  if (exactStudentMap && typeof exactStudentMap[courseId] === 'boolean') {
+    return exactStudentMap[courseId];
   }
+
+  const normTarget = normalizeStudentNameForMatch(cleanName);
+  if (!normTarget) return undefined;
+
+  for (const [key, studentMap] of Object.entries(map)) {
+    if (normalizeStudentNameForMatch(key) === normTarget && studentMap && typeof studentMap[courseId] === 'boolean') {
+      return studentMap[courseId];
+    }
+  }
+
   return undefined;
 };
 
@@ -162,6 +302,7 @@ export const bulkSetCourseAccessForStudents = async (
   try {
     const syncPromises = studentNames.map(async (name) => {
       const clean = name.trim();
+      if (!clean) return;
       const accessDocRef = doc(db, 'student_access', clean);
       return setDoc(accessDocRef, {
         studentName: clean,
@@ -217,11 +358,13 @@ export const bulkSetAllCoursesForStudent = async (
 };
 
 /**
- * Subscribes to student access updates.
+ * Subscribes to student access updates (local + Firestore real-time).
  */
 export const subscribeStudentAccess = (
   callback: (map: StudentCourseAccessMap) => void
 ): (() => void) => {
+  initStudentAccessFirestoreSync();
+
   const handler = (e: Event) => {
     const customEvent = e as CustomEvent<StudentCourseAccessMap>;
     if (customEvent.detail) {
@@ -245,60 +388,86 @@ export const subscribeStudentAccess = (
 };
 
 /**
+ * Resolves effective bag access mode for a course taking status and pricing into account.
+ */
+export const resolveEffectiveBagMode = (
+  courseId: string,
+  courseStatus: string = 'available',
+  isPaid: boolean = false
+): BagAccessMode => {
+  const storedMode = getStoredBagAccessModes()[courseId];
+
+  if (courseStatus === 'locked') {
+    return storedMode === 'selective_locked' ? 'selective_locked' : 'all_locked';
+  }
+
+  if (isPaid) {
+    // Paid courses must never be auto-unlocked for all students; require explicit grant unless locked for all
+    return storedMode === 'all_locked' ? 'all_locked' : 'selective_locked';
+  }
+
+  return storedMode || 'all_unlocked';
+};
+
+/**
  * Resolves effective unlock state for the current active student session
  */
 export const isCourseUnlockedForActiveStudent = (
   courseId: string,
   isTeacherMode: boolean = false,
   courseObj?: Course,
-  fallbackUnlocked: boolean = false
+  _fallbackUnlocked: boolean = false
 ): boolean => {
   if (isTeacherMode) return true;
 
   const profile = getStudentProfile();
-  const studentName = profile?.name?.trim();
-
-  if (studentName) {
-    const explicit = getExplicitStudentCourseAccess(studentName, courseId);
-    if (typeof explicit === 'boolean') {
-      return explicit;
-    }
-  }
-
-  return fallbackUnlocked;
+  const studentName = profile?.name?.trim() || '';
+  return getStudentEffectiveCourseAccess(
+    studentName,
+    courseId,
+    courseObj?.status || 'available',
+    courseObj?.pricing?.isPaid ?? false
+  ).isUnlocked;
 };
 
 /**
- * Returns access status for a student considering both explicit setting and bag mode
+ * Returns access status for a student considering explicit setting, bag mode, course status, and paid status
  */
 export const getStudentEffectiveCourseAccess = (
   studentName: string,
   courseId: string,
-  courseStatus: string = 'available'
-): { isUnlocked: boolean; reason: 'explicit_grant' | 'explicit_revoke' | 'mode_all_unlocked' | 'mode_selective_locked' | 'mode_all_locked' } => {
-  const explicit = getExplicitStudentCourseAccess(studentName, courseId);
-  const mode = getBagAccessMode(courseId, courseStatus === 'locked' ? 'all_locked' : 'all_unlocked');
+  courseStatus: string = 'available',
+  isPaid: boolean = false
+): {
+  isUnlocked: boolean;
+  reason: 'coming_soon' | 'explicit_grant' | 'explicit_revoke' | 'mode_all_unlocked' | 'mode_selective_locked' | 'mode_all_locked';
+} => {
+  if (courseStatus === 'coming_soon') {
+    return { isUnlocked: false, reason: 'coming_soon' };
+  }
+
+  const mode = resolveEffectiveBagMode(courseId, courseStatus, isPaid);
 
   if (mode === 'all_locked') {
-    if (explicit === true) {
-      return { isUnlocked: true, reason: 'explicit_grant' };
-    }
     return { isUnlocked: false, reason: 'mode_all_locked' };
   }
 
+  const cleanName = (studentName || '').trim();
+  const explicit = cleanName ? getExplicitStudentCourseAccess(cleanName, courseId) : undefined;
+
+  if (mode === 'selective_locked') {
+    if (explicit === true) {
+      return { isUnlocked: true, reason: 'explicit_grant' };
+    }
+    return { isUnlocked: false, reason: 'mode_selective_locked' };
+  }
+
+  // mode === 'all_unlocked'
   if (explicit === false) {
     return { isUnlocked: false, reason: 'explicit_revoke' };
   }
 
-  if (explicit === true) {
-    return { isUnlocked: true, reason: 'explicit_grant' };
-  }
-
-  if (mode === 'all_unlocked') {
-    return { isUnlocked: true, reason: 'mode_all_unlocked' };
-  }
-
-  // selective_locked: locked by default unless granted
-  return { isUnlocked: false, reason: 'mode_selective_locked' };
+  return { isUnlocked: true, reason: 'mode_all_unlocked' };
 };
+
 

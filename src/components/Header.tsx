@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Course, GroupThemeConfig } from '../types';
 import { getAllCourses } from '../data/courses';
+import { subscribeCourses } from '../utils/courseCustomStorage';
 import { isCourseUnlocked } from '../utils/studentProgressStorage';
 import { 
   Menu, X, BookOpen, Trophy, Moon, Sun, Search, Share2, 
@@ -75,12 +76,27 @@ export const Header: React.FC<HeaderProps> = ({
   const toolsDropdownRef = useRef<HTMLDivElement>(null);
 
   const [homeConfig, setHomeConfig] = useState<HomeConfig>(() => getHomeConfig());
+  const [coursesList, setCoursesList] = useState<Course[]>(() => getAllCourses());
+  const [, setAccessTick] = useState(0);
 
   useEffect(() => {
     const unsubHome = subscribeHomeConfig((cfg) => {
       setHomeConfig(cfg);
     });
-    return () => unsubHome();
+    const unsubCourses = subscribeCourses((updated) => {
+      setCoursesList(updated);
+    });
+    const handleRefresh = () => setAccessTick((t) => t + 1);
+    window.addEventListener('tajweed_unlocked_updated', handleRefresh);
+    window.addEventListener('tajweed_student_access_updated', handleRefresh);
+    window.addEventListener('tajweed_bag_access_modes_updated', handleRefresh);
+    return () => {
+      unsubHome();
+      unsubCourses();
+      window.removeEventListener('tajweed_unlocked_updated', handleRefresh);
+      window.removeEventListener('tajweed_student_access_updated', handleRefresh);
+      window.removeEventListener('tajweed_bag_access_modes_updated', handleRefresh);
+    };
   }, []);
 
   const [activeTheme, setActiveTheme] = useState<GroupThemeConfig | null>(() => {
@@ -230,7 +246,7 @@ export const Header: React.FC<HeaderProps> = ({
                       الحقائب التجويدية المقررة
                     </div>
                     <div className="max-h-56 overflow-y-auto space-y-0.5 py-1">
-                      {getAllCourses().map((c) => {
+                      {coursesList.map((c) => {
                         const unlocked = isCourseUnlocked(c.id, isTeacherMode, c);
                         const isSelected = c.id === activeCourse.id;
                         return (

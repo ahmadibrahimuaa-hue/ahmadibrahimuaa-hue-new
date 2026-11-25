@@ -15,7 +15,9 @@ import {
   bulkSetAllCoursesForStudent,
   subscribeStudentAccess,
   DEFAULT_ENROLLED_STUDENTS,
-  getExplicitStudentCourseAccess
+  getExplicitStudentCourseAccess,
+  getStudentEffectiveCourseAccess,
+  resolveEffectiveBagMode
 } from '../utils/studentAccessStorage';
 import { getSubmissionsList, getStudentProfile } from '../utils/studentStorage';
 import { getWaitlistEntries } from '../utils/waitlistStorage';
@@ -170,12 +172,16 @@ export const StudentAccessManagementPanel: React.FC<StudentAccessManagementPanel
   // Helper to determine status of a student for a course
   const getStudentCourseStatus = (studentName: string, course: Course): { isUnlocked: boolean; isOverride: boolean } => {
     const explicit = getExplicitStudentCourseAccess(studentName, course.id);
-    if (typeof explicit === 'boolean') {
-      return { isUnlocked: explicit, isOverride: true };
-    }
-    // Fallback default
-    const fallbackUnlocked = isCourseUnlocked(course.id, false, course);
-    return { isUnlocked: fallbackUnlocked, isOverride: false };
+    const effective = getStudentEffectiveCourseAccess(
+      studentName,
+      course.id,
+      course.status || 'available',
+      course.pricing?.isPaid ?? false
+    );
+    return {
+      isUnlocked: effective.isUnlocked,
+      isOverride: typeof explicit === 'boolean' && (effective.reason === 'explicit_grant' || effective.reason === 'explicit_revoke'),
+    };
   };
 
   // Filter students based on search and selected filters
@@ -295,8 +301,14 @@ export const StudentAccessManagementPanel: React.FC<StudentAccessManagementPanel
     if (!newStudentName.trim()) return;
 
     const clean = newStudentName.trim();
-    // Open foundational rules and all active courses by default
-    await Promise.all(courses.map((c) => setStudentCourseAccess(clean, c.id, true)));
+    // Only open free & publicly unlocked courses by default; keep locked/paid courses locked
+    await Promise.all(
+      courses.map((c) => {
+        const mode = resolveEffectiveBagMode(c.id, c.status || 'available', c.pricing?.isPaid ?? false);
+        const shouldOpen = c.status !== 'coming_soon' && mode === 'all_unlocked';
+        return setStudentCourseAccess(clean, c.id, shouldOpen);
+      })
+    );
     setNewStudentName('');
     setIsAddingStudent(false);
     showToast(`تمت إضافة الطالب (${clean}) وتجهيز ملف الصلاحيات الخاص به بنجاح!`, 'success');

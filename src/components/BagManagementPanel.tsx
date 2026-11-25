@@ -47,7 +47,8 @@ import {
   DEFAULT_ENROLLED_STUDENTS,
   StudentCourseAccessMap,
   subscribeStudentAccess,
-  getStudentEffectiveCourseAccess
+  getStudentEffectiveCourseAccess,
+  resolveEffectiveBagMode
 } from '../utils/studentAccessStorage';
 import { getStudentProfile, getSubmissionsList } from '../utils/studentStorage';
 import { getWaitlistEntries } from '../utils/waitlistStorage';
@@ -183,7 +184,8 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
   const handleToggleStudentAccessForCourse = async (studentName: string, courseId: string) => {
     const targetCourse = courses.find((c) => c.id === courseId);
     const courseStatus = targetCourse?.status || 'available';
-    const effective = getStudentEffectiveCourseAccess(studentName, courseId, courseStatus);
+    const isPaid = targetCourse?.pricing?.isPaid ?? false;
+    const effective = getStudentEffectiveCourseAccess(studentName, courseId, courseStatus, isPaid);
     const nextVal = !effective.isUnlocked;
 
     await setStudentCourseAccess(studentName, courseId, nextVal);
@@ -326,6 +328,22 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
 
     const ok = saveOrUpdateCourse(courseToSave);
     if (ok) {
+      if (courseToSave.status === 'locked' || courseToSave.status === 'coming_soon') {
+        setBagAccessMode(courseToSave.id, 'all_locked');
+        revokeCourseAccessFromStudent(courseToSave.id);
+      } else if (courseToSave.pricing?.isPaid) {
+        const existingMode = getStoredBagAccessModes()[courseToSave.id];
+        if (!existingMode || existingMode === 'all_unlocked') {
+          setBagAccessMode(courseToSave.id, 'selective_locked');
+        }
+        revokeCourseAccessFromStudent(courseToSave.id);
+      } else {
+        const existingMode = getStoredBagAccessModes()[courseToSave.id];
+        if (existingMode === 'all_locked') {
+          setBagAccessMode(courseToSave.id, 'all_unlocked');
+        }
+      }
+      setBagModes(getStoredBagAccessModes());
       notifySuccess(`تم حفظ وتحديث الحقيبة "${courseToSave.title}" بنجاح!`);
       setSelectedBagId(courseToSave.id);
       setViewMode('bags_list');
@@ -390,9 +408,17 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
     // Preserve current isPaid and pricing strictly - do not force paid when coming_soon
     updateCourseStatus(course.id, newStatus);
     if (newStatus === 'locked' || newStatus === 'coming_soon') {
+      setBagAccessMode(course.id, 'all_locked');
       revokeCourseAccessFromStudent(course.id);
       setUnlockedStudentCourses((prev) => prev.filter((id) => id !== course.id));
+    } else if (newStatus === 'available') {
+      if (course.pricing?.isPaid) {
+        setBagAccessMode(course.id, 'selective_locked');
+      } else {
+        setBagAccessMode(course.id, 'all_unlocked');
+      }
     }
+    setBagModes(getStoredBagAccessModes());
     notifySuccess(`تم تحديث حالة الحقيبة "${course.shortTitle || course.title}" إلى: ${
       newStatus === 'available' ? '🟢 نشطة ومتاحة' : newStatus === 'coming_soon' ? '⏳ قريباً - قيد الإعداد' : '🔒 مغلقة ومقفلة في النظام كله'
     }`);
@@ -407,6 +433,16 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
       : 'متاحة مجاناً ومفتوحة';
 
     updateCourseStatus(course.id, course.status, nextIsPaid, nextPriceText);
+    if (nextIsPaid) {
+      revokeCourseAccessFromStudent(course.id);
+      setUnlockedStudentCourses((prev) => prev.filter((id) => id !== course.id));
+      if (course.status !== 'locked') {
+        setBagAccessMode(course.id, 'selective_locked');
+      }
+    } else if (course.status === 'available') {
+      setBagAccessMode(course.id, 'all_unlocked');
+    }
+    setBagModes(getStoredBagAccessModes());
     notifySuccess(
       nextIsPaid
         ? `تم تحويل الحقيبة "${course.shortTitle || course.title}" إلى: محتوى مدفوع 🔒 (مقفلة تلقائياً عن الطلاب)`
@@ -1196,9 +1232,8 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
                         {/* Mode Indicator Badge */}
                         <div className="flex items-center gap-1 shrink-0">
                           {(() => {
-                            const def = course.status === 'locked' ? 'all_locked' : 'all_unlocked';
-                            const mode = bagModes[course.id] || def;
-                            if (mode === 'all_locked' || course.status === 'locked') {
+                            const mode = resolveEffectiveBagMode(course.id, course.status || 'available', isPaid);
+                            if (mode === 'all_locked' || course.status === 'coming_soon') {
                               return (
                                 <span className="bg-rose-950 text-rose-300 text-[10px] px-2 py-0.5 rounded-full border border-rose-800">
                                   مقفلة للجميع 🔒
@@ -1208,7 +1243,7 @@ export const BagManagementPanel: React.FC<BagManagementPanelProps> = ({
                             if (mode === 'selective_locked') {
                               return (
                                 <span className="bg-amber-950 text-amber-300 text-[10px] px-2 py-0.5 rounded-full border border-amber-700 font-sans">
-                                  مخصصة لطلاب محددين 🎯
+                                  {isPaid ? 'مدفوعة / مخصصة 🎯' : 'مخصصة لطلاب محددين 🎯'}
                                 </span>
                               );
                             }
